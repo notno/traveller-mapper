@@ -1,0 +1,87 @@
+/* Basic styling for the heat map generator */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 1rem;
+    background-color: #f6f8fa;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+header {
+    max-width: 800px;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+h1 {
+    margin: 0.5rem 0;
+    font-size: 1.6rem;
+}
+
+p {
+    line-height: 1.5;
+    margin: 0.5rem 0 1rem 0;
+    font-size: 0.95rem;
+}
+
+#controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+#controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#controls input[type=range] {
+    width: 150px;
+}
+
+#controls button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #0074d9;
+    color: white;
+    transition: background-color 0.2s ease;
+}
+
+#controls button:hover {
+    background-color: #005fa3;
+}
+
+#canvasWrapper {
+    /* Allow the canvas to expand beyond the viewport; scrollbars appear
+       automatically when zooming in.  We do not constrain the width so
+       that the canvas can grow when the zoom factor increases. */
+    width: 100%;
+    margin-bottom: 1rem;
+    overflow: auto;
+}
+
+canvas {
+    /* The canvas size is controlled via JavaScript.  Leave width/height
+       unset here to allow the script to specify explicit dimensions. */
+    border: 1px solid #ccc;
+    background-color: white;
+    display: block;
+}
+
+footer {
+    max-width: 800px;
+    font-size: 0.85rem;
+    text-align: center;
+    color: #555;
+    margin-top: 1rem;
+}
