@@ -13,16 +13,21 @@
         <p>
             This tool now generates a star‑density heat map for an entire sector
             of Traveller space. A sector is composed of 4 × 4 subsectors; each
-            subsector contains an 8 × 10 hex grid. Within each subsector the
-            densities are created using a simplified slime‑mold algorithm:
+            subsector contains an 8 × 10 hex grid. 
+        </p>
+        <p>
+            If you generate a map you like, make sure to save the "seed" string, which has your current parameters and a random seed.
+        </p>
+        <p>
+            Within each subsector the densities are created using a simplified slime‑mold algorithm:
             agents sense the pheromone field ahead, slightly to the left and
             right, turn towards the strongest stimulus, move forward, deposit
             trail, and the trail diffuses and decays.
+        </p>
+        <p>
             The aggregated field is quantized into discrete colour levels, from
             black to white. Use the controls below to adjust the number of
-            levels, regenerate the pattern and download it as a PNG. PNG
-            format preserves transparency in the areas outside the hex tiles,
-            making it suitable for overlaying or further compositing.
+            levels, regenerate the pattern and download it as a PNG. 
         </p>
     </header>
     <section id="controls">
