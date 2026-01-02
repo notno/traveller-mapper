@@ -7,7 +7,7 @@
  * trail and the trail diffuses and decays.  After the simulation, the
  * accumulated trail is mapped onto a hexagonal grid and quantized to
  * produce dark and light tiles.  Users can regenerate the map, adjust
- * quantization bit depth and export the canvas as a JPEG.
+ * quantization bit depth and export the canvas as a PNG.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateBtn = document.getElementById('generate');
     const downloadBtn = document.getElementById('download');
     const downloadSubsectorBtn = document.getElementById('downloadSubsector');
+    // Randomize seed button
+    const randomizeBtn = document.getElementById('randomizeSeed');
     // Zoom controls
     const zoomSlider = document.getElementById('zoom');
     const zoomValue = document.getElementById('zoomValue');
@@ -77,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let zoomFactor = 1.0;
     // Currently selected subsector for highlighting and export; null when none
     let selectedSubsector = null;
-    // Export scale: how many times larger the exported JPEG should be compared
+    // Export scale: how many times larger the exported PNG should be compared
     // with the on‑screen canvas.  Increase this for higher resolution output.
     const exportScale = 3;
     // Store the side length computed in drawHexGrid for click detection and
@@ -96,6 +98,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // current map.  rngState stores the internal state of the LCG.
     let currentSeed = 0;
     let rngState = 0;
+
+    /**
+     * Update the encoded seed string displayed in the seed input and
+     * seed display.  Uses the current bit depth, simulation scale,
+     * saturate factor, display mode and numeric seed.  Does not change
+     * the numeric seed.  Call this whenever UI controls change so the
+     * prefix reflects the latest parameters.
+     */
+    function updateEncodedSeedString() {
+        const levels = bitDepthSlider.value;
+        const scaleVal = parseFloat(simScaleSlider.value).toFixed(1);
+        const satVal = parseFloat(saturateSlider.value).toFixed(1);
+        const modeCode = (displayMode === 'dm') ? 'd' : 'l';
+        const encoded = `${levels}-${scaleVal}-${satVal}-${modeCode}-${currentSeed}`;
+        seedInput.value = encoded;
+        seedDisplay.textContent = `Seed ${encoded}`;
+    }
 
     /**
      * Initialise the seeded RNG with a 32‑bit integer seed.  All random
@@ -125,10 +144,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * Run the slime‑mold simulation on a small 2D grid.  Returns a flat array
      * of length simWidth × simHeight representing the amount of trail at each
      * cell after diffusion and decay.  Uses a simplified version of the
-     * agent‑based Physarum algorithm described by Pavel Peřina: each agent
-     * senses the pheromone field straight ahead and slightly to the left and
-     * right, turns toward the strongest signal, moves forward, deposits
-     * trail, and the trail diffuses and decays.
+     * agent‑based Physarum algorithm: each agent senses the pheromone field
+     * straight ahead and slightly to the left and right, turns toward the
+     * strongest signal, moves forward, deposits trail, and the trail
+     * diffuses and decays.
      */
     function runSimulation(nCols = subCols, nRows = subRows) {
         // Determine grid dimensions with small random offsets to avoid symmetric
@@ -631,31 +650,83 @@ document.addEventListener('DOMContentLoaded', () => {
         drawHexGrid();
     }
 
-    // Update bit depth display and redraw when slider moves
+    // Update bit depth display and redraw when slider moves.  Also update
+    // the encoded seed prefix to reflect the new level.
     bitDepthSlider.addEventListener('input', () => {
         bitDepthValue.textContent = bitDepthSlider.value;
         drawHexGrid();
+        updateEncodedSeedString();
     });
 
-    // Generate new map on button click.  If a seed is provided in the
-    // seedInput field, use it; otherwise generate a new random seed.
+    // Generate new map on button click.  If a seed string with encoded
+    // parameters is provided in the seedInput field, parse the prefix to
+    // restore those settings.  Otherwise generate a new random seed.  After
+    // generation, update the seed input with an encoded string that
+    // incorporates the current level, scale, saturate and display mode.
     generateBtn.addEventListener('click', () => {
-        // Determine seed
+        // Read the seed string and trim whitespace
         const seedStr = seedInput.value.trim();
-        if (seedStr === '') {
-            // Generate a new random seed (32‑bit unsigned integer)
-            currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
-            seedInput.value = currentSeed.toString();
-        } else {
-            // Parse the provided seed; fallback to zero on NaN
-            const parsed = parseInt(seedStr, 10);
-            currentSeed = isNaN(parsed) ? 0 : (parsed >>> 0);
+        let numericSeed;
+        // Helper to synchronise UI controls and internal variables
+        function updateUIFromParams(levels, scale, saturate, modeCode) {
+            // Update bit depth slider and display
+            const lvl = parseInt(levels, 10);
+            if (!isNaN(lvl)) {
+                bitDepthSlider.value = lvl;
+                bitDepthValue.textContent = lvl.toString();
+            }
+            // Update simulation scale
+            const sc = parseFloat(scale);
+            if (!isNaN(sc)) {
+                simScaleSlider.value = sc;
+                simScaleValue.textContent = sc.toFixed(1);
+                simulationScale = sc;
+            }
+            // Update saturate factor
+            const sat = parseFloat(saturate);
+            if (!isNaN(sat)) {
+                saturateSlider.value = sat;
+                saturateValue.textContent = sat.toFixed(1);
+                saturateFactor = sat;
+            }
+            // Update display mode and radio buttons
+            if (modeCode === 'd') {
+                displayMode = 'dm';
+            } else {
+                displayMode = 'density';
+            }
+            modeRadioButtons.forEach((rb) => {
+                rb.checked = (rb.value === displayMode);
+            });
         }
-        // Initialise seeded RNG and display the seed
+        if (seedStr !== '') {
+            const parts = seedStr.split('-');
+            // If the seed string has at least 5 parts, assume it encodes
+            // params as levels-scale-saturate-mode-numericSeed.  Any
+            // additional hyphens in the numeric seed are joined back.
+            if (parts.length >= 5) {
+                const levelsPart = parts[0];
+                const scalePart = parts[1];
+                const saturatePart = parts[2];
+                const modePart = parts[3];
+                const seedPart = parts.slice(4).join('-');
+                const parsedSeed = parseInt(seedPart, 10);
+                numericSeed = isNaN(parsedSeed) ? undefined : (parsedSeed >>> 0);
+                // Update UI controls from encoded parameters
+                updateUIFromParams(levelsPart, scalePart, saturatePart, modePart);
+            } else {
+                // Only a numeric seed provided
+                const parsed = parseInt(seedStr, 10);
+                numericSeed = isNaN(parsed) ? undefined : (parsed >>> 0);
+            }
+        }
+        // If no valid numeric seed extracted, generate a new one
+        if (numericSeed === undefined) {
+            numericSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+        }
+        currentSeed = numericSeed;
+        // Initialise seeded RNG to ensure deterministic simulation
         setSeed(currentSeed);
-        // Display the seed so users can note it for later.  The seed is
-        // shown separately from the input field to make it obvious.
-        seedDisplay.textContent = `Seed ${currentSeed}`;
         // Disable button temporarily to prevent multiple runs
         generateBtn.disabled = true;
         generateBtn.textContent = 'Generating…';
@@ -663,11 +734,36 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             generateMap();
             generateBtn.disabled = false;
-            generateBtn.textContent = 'Generate New Map';
+            generateBtn.textContent = 'Generate from seed';
+            // After generation, update the encoded seed prefix to
+            // reflect the current parameters and numeric seed.
+            updateEncodedSeedString();
         }, 10);
     });
 
-    // Download canvas as JPEG
+    // Randomize seed button: generate a new random seed and create a
+    // fresh map using the current parameters.  After regeneration the
+    // encoded seed string is updated.  This does not rely on the
+    // contents of the seed input field.
+    randomizeBtn.addEventListener('click', () => {
+        // Generate a new random seed
+        currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+        // Initialise seeded RNG
+        setSeed(currentSeed);
+        // Temporarily disable the button to avoid multiple clicks
+        randomizeBtn.disabled = true;
+        randomizeBtn.textContent = 'Randomizing…';
+        // Run simulation asynchronously
+        setTimeout(() => {
+            generateMap();
+            randomizeBtn.disabled = false;
+            randomizeBtn.textContent = 'Randomize seed';
+            // Update encoded seed string to reflect the new random seed
+            updateEncodedSeedString();
+        }, 10);
+    });
+
+    // Download canvas as PNG
     downloadBtn.addEventListener('click', () => {
         // Export the entire sector at a higher resolution
         exportSector();
@@ -685,11 +781,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Generate the first map automatically when the page loads.  Use a
     // random seed and store it so users can reproduce the pattern later.
     currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
-    seedInput.value = currentSeed.toString();
+    // Seeded RNG initialisation
     setSeed(currentSeed);
-    // Display the seed used for the initial map
-    seedDisplay.textContent = `Seed ${currentSeed}`;
+    // Generate the map using current UI parameters
     generateMap();
+    // Build the initial encoded seed string reflecting the current
+    // parameters and numeric seed, and update the seed input/display.
+    updateEncodedSeedString();
 
     // Zoom control: instead of using a CSS transform (which causes aliasing
     // artifacts when magnifying), adjust the canvas's internal resolution and
@@ -728,10 +826,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Simulation scale control: update the simulation scale factor and show the value.
-    // Use input event to update display immediately and change event to regenerate map
+    // Use input event to update display immediately and also update the encoded seed.
     simScaleSlider.addEventListener('input', () => {
         simulationScale = parseFloat(simScaleSlider.value);
         simScaleValue.textContent = simulationScale.toFixed(1);
+        updateEncodedSeedString();
     });
     simScaleSlider.addEventListener('change', () => {
         // Regenerate the map with the new scale
@@ -739,19 +838,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Saturate slider: update saturateFactor and value display on input.
+    // Also update the encoded seed to reflect the new saturate value.
     saturateSlider.addEventListener('input', () => {
         saturateFactor = parseFloat(saturateSlider.value);
         saturateValue.textContent = saturateFactor.toFixed(1);
         // Redraw the grid with new saturate factor (no need to re‑simulate)
         drawHexGrid();
+        updateEncodedSeedString();
     });
 
-    // Change display mode when radio buttons change
+    // Change display mode when radio buttons change.  Update the encoded seed
+    // prefix to reflect the new mode and redraw the grid.
     modeRadioButtons.forEach((radio) => {
         radio.addEventListener('change', (event) => {
             displayMode = event.target.value;
             // Redraw grid with new labels (no need to regenerate simulation)
             drawHexGrid();
+            updateEncodedSeedString();
         });
     });
 
@@ -820,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 offCtx.closePath();
                 offCtx.fill();
-                // Determine text to display at center based on displayMode
+                // Determine text to display at centre based on displayMode
                 let displayTextExp;
                 if (displayMode === 'dm') {
                     const quartSize = levels / 4;
