@@ -37,6 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const seedInput = document.getElementById('seedInput');
     const seedDisplay = document.getElementById('seedDisplay');
 
+    // Printable mode checkbox
+    const printableCheckbox = document.getElementById('printable');
+
     // Hex grid configuration
     // Each subsector contains a fixed number of columns and rows of hexes
     const subCols = 8;    // columns per subsector (west–east)
@@ -92,6 +95,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Saturate factor: controls brightness bias.  >1 brightens, <1 darkens.
     let saturateFactor = 1.0;
 
+    // Printable mode: when true, hex cells are rendered using dot patterns
+    // instead of solid greys.  This makes the map more suitable for
+    // black‑and‑white printing.  Default is false.
+    let printableMode = false;
+
     // Seeded random number generator state.  To reproduce patterns, we use a
     // simple linear congruential generator (LCG) instead of Math.random()
     // during the simulation.  currentSeed holds the seed used for the
@@ -111,7 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleVal = parseFloat(simScaleSlider.value).toFixed(1);
         const satVal = parseFloat(saturateSlider.value).toFixed(1);
         const modeCode = (displayMode === 'dm') ? 'd' : 'l';
-        const encoded = `${levels}-${scaleVal}-${satVal}-${modeCode}-${currentSeed}`;
+        // Encode printable mode as 'p' for printable and 'n' for normal
+        const printableCode = printableMode ? 'p' : 'n';
+        const encoded = `${levels}-${scaleVal}-${satVal}-${modeCode}-${printableCode}-${currentSeed}`;
         seedInput.value = encoded;
         seedDisplay.textContent = `Seed ${encoded}`;
     }
@@ -423,15 +433,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 ctx.closePath();
-                ctx.fill();
-                // Optional thin border around each hex for legibility.  Omit
-                // outlines when there are very few levels to avoid adding
-                // perceptual greys.  Draw subtle outlines otherwise.
-                if (levels > 3) {
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
+                if (!printableMode) {
+                    // Solid fill for normal mode
+                    ctx.fill();
+                } else {
+                    // Printable mode: no shading or fill; just leave the
+                    // cell background blank so only DM values are visible.
+                    // The border will be drawn below to outline the hex.
                 }
+                // Always draw a thin border around each hex for
+                // legibility, even in printable mode.  Use a
+                // semi‑transparent stroke so the outlines are visible but
+                // unobtrusive.  Rendering the outline after any fill
+                // ensures it appears on top.
+                // Use a slightly darker outline in printable mode for better
+                // contrast.  In normal mode, keep it lighter.  The border
+                // ensures hex shapes remain visible on top of shading.
+                const borderOpacity = printableMode ? 0.6 : 0.3;
+                ctx.strokeStyle = `rgba(0, 0, 0, ${borderOpacity})`;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
                 // Determine the text to display at the centre of the hex.
                 let displayText;
                 if (displayMode === 'dm') {
@@ -457,7 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     displayText = (level + 1).toString();
                 }
                 // Use white text on dark backgrounds and black on light backgrounds
-                const densityColour = (gray > 128) ? '#000' : '#fff';
+                // In printable mode the background is white/transparent, so
+                // always use a dark colour for the DM text.  Otherwise
+                // choose black on light greys and white on dark greys.
+                const densityColour = printableMode ? '#000' : ((gray > 128) ? '#000' : '#fff');
                 ctx.fillStyle = densityColour;
                 ctx.font = `${(sideLen * 0.35).toFixed(2)}px sans-serif`;
                 ctx.textAlign = 'center';
@@ -668,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const seedStr = seedInput.value.trim();
         let numericSeed;
         // Helper to synchronise UI controls and internal variables
-        function updateUIFromParams(levels, scale, saturate, modeCode) {
+        function updateUIFromParams(levels, scale, saturate, modeCode, printableCode) {
             // Update bit depth slider and display
             const lvl = parseInt(levels, 10);
             if (!isNaN(lvl)) {
@@ -698,13 +722,32 @@ document.addEventListener('DOMContentLoaded', () => {
             modeRadioButtons.forEach((rb) => {
                 rb.checked = (rb.value === displayMode);
             });
+
+            // Update printable mode if provided
+            if (printableCode !== undefined) {
+                printableMode = (printableCode === 'p');
+                printableCheckbox.checked = printableMode;
+            }
         }
         if (seedStr !== '') {
             const parts = seedStr.split('-');
             // If the seed string has at least 5 parts, assume it encodes
             // params as levels-scale-saturate-mode-numericSeed.  Any
             // additional hyphens in the numeric seed are joined back.
-            if (parts.length >= 5) {
+            if (parts.length >= 6) {
+                // New format: levels-scale-saturate-mode-printable-numericSeed
+                const levelsPart = parts[0];
+                const scalePart = parts[1];
+                const saturatePart = parts[2];
+                const modePart = parts[3];
+                const printablePart = parts[4];
+                const seedPart = parts.slice(5).join('-');
+                const parsedSeed = parseInt(seedPart, 10);
+                numericSeed = isNaN(parsedSeed) ? undefined : (parsedSeed >>> 0);
+                // Update UI controls from encoded parameters
+                updateUIFromParams(levelsPart, scalePart, saturatePart, modePart, printablePart);
+            } else if (parts.length >= 5) {
+                // Older format: levels-scale-saturate-mode-numericSeed
                 const levelsPart = parts[0];
                 const scalePart = parts[1];
                 const saturatePart = parts[2];
@@ -712,7 +755,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const seedPart = parts.slice(4).join('-');
                 const parsedSeed = parseInt(seedPart, 10);
                 numericSeed = isNaN(parsedSeed) ? undefined : (parsedSeed >>> 0);
-                // Update UI controls from encoded parameters
                 updateUIFromParams(levelsPart, scalePart, saturatePart, modePart);
             } else {
                 // Only a numeric seed provided
@@ -847,6 +889,14 @@ document.addEventListener('DOMContentLoaded', () => {
         updateEncodedSeedString();
     });
 
+    // Printable checkbox: toggle printableMode and redraw.  Update the
+    // encoded seed prefix to reflect the new printable setting.
+    printableCheckbox.addEventListener('change', () => {
+        printableMode = printableCheckbox.checked;
+        drawHexGrid();
+        updateEncodedSeedString();
+    });
+
     // Change display mode when radio buttons change.  Update the encoded seed
     // prefix to reflect the new mode and redraw the grid.
     modeRadioButtons.forEach((radio) => {
@@ -922,7 +972,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 offCtx.closePath();
-                offCtx.fill();
+                if (!printableMode) {
+                    // Solid fill in normal mode
+                    offCtx.fillStyle = `rgb(${gray},${gray},${gray})`;
+                    offCtx.fill();
+                } else {
+                    // Printable mode: do not fill or shade; leave hex
+                    // background transparent.  Only the outline will be
+                    // drawn (below) and DM values will be rendered.
+                }
+                // Draw a thin outline around each hex for legibility.  Use
+                // a darker outline in printable mode.  This comes after
+                // any fill or shading so it appears on top.
+                {
+                    const borderOpacityCell = printableMode ? 0.6 : 0.3;
+                    offCtx.strokeStyle = `rgba(0, 0, 0, ${borderOpacityCell})`;
+                    offCtx.lineWidth = 0.5 * exportScale;
+                    offCtx.stroke();
+                }
                 // Determine text to display at centre based on displayMode
                 let displayTextExp;
                 if (displayMode === 'dm') {
@@ -941,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     displayTextExp = (level + 1).toString();
                 }
-                const densityColour = (gray > 128) ? '#000' : '#fff';
+                const densityColour = printableMode ? '#000' : ((gray > 128) ? '#000' : '#fff');
                 offCtx.fillStyle = densityColour;
                 offCtx.font = `${(sideLenExp * 0.35).toFixed(2)}px sans-serif`;
                 offCtx.textAlign = 'center';
@@ -1106,7 +1173,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     else offCtx.lineTo(x, y);
                 }
                 offCtx.closePath();
-                offCtx.fill();
+                if (!printableMode) {
+                    offCtx.fillStyle = `rgb(${gray},${gray},${gray})`;
+                    offCtx.fill();
+                } else {
+                    // Printable mode: do not fill or shade; leave cell
+                    // background transparent.  The border will be drawn
+                    // below.
+                }
                 // Determine label based on display mode
                 let displayTextExp;
                 if (displayMode === 'dm') {
@@ -1125,12 +1199,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     displayTextExp = (level + 1).toString();
                 }
-                const densityColour = (gray > 128) ? '#000' : '#fff';
+                const densityColour = printableMode ? '#000' : ((gray > 128) ? '#000' : '#fff');
                 offCtx.fillStyle = densityColour;
                 offCtx.font = `${(sideLenExp * 0.35).toFixed(2)}px sans-serif`;
                 offCtx.textAlign = 'center';
                 offCtx.textBaseline = 'middle';
                 offCtx.fillText(displayTextExp, cx, cy);
+                // Draw a thin outline around each hex for legibility.  Use
+                // a darker outline in printable mode.
+                {
+                    const borderOpacityCell = printableMode ? 0.6 : 0.3;
+                    offCtx.strokeStyle = `rgba(0, 0, 0, ${borderOpacityCell})`;
+                    offCtx.lineWidth = 0.5 * exportScale;
+                    offCtx.stroke();
+                }
                 // coordinate label (local coordinates 01–08, 01–10)
                 const colStr = String(col + 1).padStart(2, '0');
                 const rowStr = String(row + 1).padStart(2, '0');
