@@ -11,60 +11,78 @@
 </head>
 <body>
     <header>
-        <h1>Star Map Generator for 2d6 Sci Fi games</h1>
-        <p>
-            This tool now generates a star‑density heat map for an entire sector
-            of Traveller space. A sector is composed of 4 × 4 subsectors; each
-            subsector contains an 8 × 10 hex grid. Within each subsector the
-            densities are created using a simplified slime‑mold algorithm:
-            agents sense the pheromone field ahead, slightly to the left and
-            right, turn towards the strongest stimulus, move forward, deposit
-            trail, and the trail diffuses and decays.
-            The aggregated field is quantized into discrete color levels, from
-            black to white. Use the controls below to adjust the number of
-            levels, regenerate the pattern and download it as a PNG. PNG
-            format preserves transparency in the areas outside the hex tiles,
-            making it suitable for overlaying or further compositing.
-        </p>
+        <h1>Strands and Clusters</h1>
+        <h2>A tool for generating organic-looking star maps for 2d6 sci-fi games, v0.0.2</h2>
+        <ul>
+        <li>Generate a single UWP (<a href="https://www.orffenspace.com/cepheus-srd/book3/worlds.html">Universal World Profile</a>)</li>
+        <li>Generate a map of UWPs</li>
+        </ul>
+        <p>Currently based on rules from Cepheus Deluxe.</p>
     </header>
     <!-- Single World Generator section -->
     <section id="worldGenSection" class="panel">
         <h2>Single World Generator</h2>
+        <p>Generates an 8-digit code (UWP) detail:</p>
+        <ol>
+            <li>Starport</li>
+            <li>Size</li>
+            <li>Atmosphere</li>
+            <li>Hydrology</li>
+            <li>Population</li>
+            <li>Governement</li>
+            <li>Law</li>
+            <li>TechLevel</li>
+        </ol>
+        <p>An asterisk* indicates the presence of a gas giant in the system.</p>
+        <p>Trade codes:</p>
+        <ul>
+            <li>Agricultural: <b>Ag</b></li>
+            <li>Asteroid: <b>As</b></li>
+            <li>Barren: <b>Ba</b></li>
+            <li>Non-water fluid oceans: <b>Fl</b></li>
+            <li>Garden: <b>Ga</b></li>
+            <li>High population: <b>Hi</b></li>
+            <li>High technology: <b>Ht</b></li>
+            <li>Ice-capped: <b>Ic</b> </li>
+            <li>Industrial: <b>In</b></li>
+            <li>Low population: <b>Lo</b></li>
+            <li>Low technology: <b>Lt</b></li>
+            <li>Non-agricultural: <b>Na</b></li>
+            <li>Poor: <b>Po</b></li>
+            <li>Rich: <b>Ri</b></li>
+            <li>Water world: <b>Wa</b></li>
+            <li>Vacuum: <b>Va</b></li>
+        </ul>
+        <p>Base codes:</p>
+        <ul>
+           <li>Naval: N</li>
+           <li>Pirate: P</li>
+            <li>Research: R</li>
+            <li>Scout: S</li>
+        </ul>
         <button id="generateWorldBtn">Generate World</button>
         <!-- Output area for single world details.  Use pre-wrap so line breaks are preserved and give it a border for readability -->
         <pre id="worldOutput" class="panel-output"></pre>
     </section>
+    <header>
+        <p>
+            This tool generates a star‑density heat map for one to four sectors
+            of Traveller space. A sector is composed of 4 × 4 subsectors; each
+            subsector contains an 8 × 10 hex grid.
+        </p>
+        <p>Within each subsector the densities are created using a simplified slime‑mold algorithm:
+            agents sense the pheromone field ahead, slightly to the left and
+            right, turn towards the strongest stimulus, move forward, deposit
+            trail, and the trail diffuses and decays.
+        </p>
+        <p>
+            The aggregated field is quantized into discrete color levels, from
+            black to white. Use the controls below to adjust the number of
+            levels, regenerate the pattern and download it as a PNG.
+        </p>
+    </header>
     <section id="controls" class="panel">
         <h2>Sector Generator</h2>
-        <div class="control-group">
-            <div class="control-row">
-                <label for="bitDepth">Levels
-                    <!-- Allow up to 16 discrete levels. 2 = black/white; 16 = 16 greys. -->
-                    <input type="range" id="bitDepth" min="2" max="16" value="16">
-                </label>
-                <span id="bitDepthValue">16</span>
-            </div>
-        </div>
-        <div class="control-group">
-            <div class="control-row">
-                <!-- Simulation scale: adjust agent sensor distance and speed to affect pattern scale -->
-                <label for="simScale">Simulation scale
-                    <!-- Cap the simulation scale slider at 1.0.  Values above 1 produce
-                         patterns that are too sparse, so we limit the maximum to 1.0. -->
-                    <input type="range" id="simScale" min="0.5" max="1" step="0.1" value="1">
-                </label>
-                <span id="simScaleValue">1.0</span>
-            </div>
-        </div>
-        <div class="control-group">
-            <div class="control-row">
-                <!-- Zoom control: allow users to scale the canvas for readability -->
-                <label for="zoom">Zoom
-                    <input type="range" id="zoom" min="0.5" max="4" step="0.1" value="1">
-                </label>
-                <span id="zoomValue">1.0×</span>
-            </div>
-        </div>
         <div class="control-group">
             <div class="control-row">
                 <!-- Saturate slider: biases the distribution of density values.
@@ -72,20 +90,19 @@
                      values below 1 darken it. -->
                 <label for="saturate">Saturate
                     <!-- Increase the maximum saturate value to 5 to allow brighter maps and more +1s -->
-                    <input type="range" id="saturate" min="0.5" max="5" step="0.1" value="1">
+                    <input type="range" id="saturate" min="0.1" max="5" step="0.1" value="1">
                 </label>
                 <span id="saturateValue">1.0</span>
             </div>
         </div>
         <div class="control-group">
-            <!-- Display mode toggle: choose between raw density levels and world occurrence DM -->
-            <span id="displayModeLabel" class="control-group__label">Display</span>
-            <label class="control-option">
-                <input type="radio" name="displayMode" value="density"> Density
-            </label>
-            <label class="control-option">
-                <input type="radio" name="displayMode" value="dm" checked> World DM
-            </label>
+            <div class="control-row">
+                <label for="bitDepth">Levels of density
+                    <!-- Allow up to 16 discrete levels. 2 = black/white; 16 = 16 greys. -->
+                    <input type="range" id="bitDepth" min="2" max="32" value="16">
+                </label>
+                <span id="bitDepthValue">16</span>
+            </div>
         </div>
         <div class="control-group">
             <div class="control-row">
@@ -94,12 +111,43 @@
                      means even dim areas count as worlds; a higher threshold restricts
                      worlds to the brightest regions.  Threshold values range from 1 to
                      the current number of quantisation levels. -->
-                <label for="presenceThreshold">World&nbsp;presence
-                    <input type="range" id="presenceThreshold" min="1" max="16" value="8">
+                <label for="presenceThreshold">World&nbsp;rarity
+                    <input type="range" id="presenceThreshold" min="1" max="16" value="4">
                 </label>
                 <span id="presenceThresholdValue">8</span>
             </div>
         </div>
+        <div class="control-group">
+            <div class="control-row">
+                <!-- Simulation scale: adjust agent sensor distance and speed to affect pattern scale -->
+                <label for="simScale">Simulation zoom
+                    <!-- Cap the simulation zoom slider at 1.5.  Values above 1 produce
+                         patterns that are too sparse, so we limit the maximum to 1.0. -->
+                    <input type="range" id="simScale" min="0.3" max="1.5" step="0.1" value="1">
+                </label>
+                <span id="simScaleValue">1.0</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <div class="control-row">
+                <!-- Zoom control: allow users to scale the canvas for readability -->
+                <label for="zoom">Map zoom
+                    <input type="range" id="zoom" min="0.5" max="4" step="0.1" value="1.3">
+                </label>
+                <span id="zoomValue">1.3×</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <!-- Display mode toggle: choose between raw density levels and world occurrence DM -->
+            <span id="displayModeLabel" class="control-group__label">Display</span>
+            <label class="control-option">
+                <input type="radio" name="displayMode" value="density" checked> Density
+            </label>
+            <label class="control-option">
+                <input type="radio" name="displayMode" value="dm"> World DM
+            </label>
+        </div>
+
         <div class="control-group">
             <!-- Map mode toggle: choose between a single 4×4 subsector sector (default)
                  and a larger multi-sector view.  In vastness mode the generator
@@ -107,10 +155,10 @@
                  sectors. -->
             <span id="mapModeLabel" class="control-group__label">Map mode</span>
             <label class="control-option">
-                <input type="radio" name="mapMode" value="single" checked> Single
+                <input type="radio" name="mapMode" value="single" checked> Single Sector
             </label>
             <label class="control-option">
-                <input type="radio" name="mapMode" value="vastness"> Vastness
+                <input type="radio" name="mapMode" value="vastness"> 2x2 Sectors
             </label>
         </div>
         <div class="control-group">
@@ -123,7 +171,7 @@
                  for every hex that meets the presence threshold and displays its
                  UWP code on the map. -->
             <label class="control-option">
-                <input type="checkbox" id="wholeWorlds"> Whole world generation
+                <input type="checkbox" id="wholeWorlds" checked> Whole world generation
             </label>
             <!-- Printable mode: when checked, cells are rendered with dot patterns instead of solid greys. -->
             <label class="control-option" for="printable">

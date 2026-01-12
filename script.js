@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // reference them.  Defining them here avoids reference errors
     // caused by temporal dead zones when using `let` declarations.
     let showBoundaries = true;
-    let generateWholeWorlds = false;
+    let generateWholeWorlds = true;
     let worlds = [];
 
     // Presence threshold controls
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // State for UI features
     // Current zoom factor; used to scale the canvas via CSS transform
-    let zoomFactor = 1.0;
+    let zoomFactor = 1.3;
     // Currently selected subsector for highlighting and export; null when none
     let selectedSubsector = null;
     // Export scale: how many times larger the exported PNG should be compared
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Simulation scale factor controlling agent sensor distance and step size
     let simulationScale = 1.0;
     // Display mode: 'density' shows world presence; 'dm' shows world occurrence DM values
-    let displayMode = 'dm';
+    let displayMode = 'density';
     // Saturate factor: controls brightness bias.  >1 brightens, <1 darkens.
     let saturateFactor = 1.0;
 
@@ -836,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // level, trade codes and bases if present.
     function formatWorldInfo(world) {
         const lines = [];
-        lines.push(`UWP: ${worldToUWP(world)}`);
+        //lines.push(`UWP: ${worldToUWP(world)}`);
         lines.push(`Starport: ${world.starport}`);
         lines.push(`Size: ${world.size}`);
         lines.push(`Atmosphere: ${world.atmosphere}`);
@@ -1140,7 +1140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Expand to a larger sector: 8×6 subsectors for vastness
                 subSectorCols = 8;
-                subSectorRows = 6;
+                subSectorRows = 8;
             }
             // Recalculate totals
             cols = subCols * subSectorCols;
