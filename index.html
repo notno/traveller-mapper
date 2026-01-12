@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Star Density Heat Map Generator</title>
-    <!-- Remove nonexistent styles file; optionally you can add your own CSS file -->
-    <!-- <link rel="stylesheet" href="style.css"> -->
+    <link rel="stylesheet" href="styles.css">
     <!-- Load world generation logic before the main script -->
     <script defer src="worldgen.js"></script>
     <script defer src="script.js"></script>
 </head>
 <body>
     <header>
-        <h1>Star Density Heat Map Generator</h1>
+        <h1>Star Map Generator for 2d6 Sci Fi games</h1>
         <p>
             This tool now generates a star‑density heat map for an entire sector
             of Traveller space. A sector is composed of 4 × 4 subsectors; each
@@ -21,7 +20,7 @@
             agents sense the pheromone field ahead, slightly to the left and
             right, turn towards the strongest stimulus, move forward, deposit
             trail, and the trail diffuses and decays.
-            The aggregated field is quantized into discrete colour levels, from
+            The aggregated field is quantized into discrete color levels, from
             black to white. Use the controls below to adjust the number of
             levels, regenerate the pattern and download it as a PNG. PNG
             format preserves transparency in the areas outside the hex tiles,
@@ -33,9 +32,10 @@
         <h2>Single World Generator</h2>
         <button id="generateWorldBtn">Generate World</button>
         <!-- Output area for single world details.  Use pre-wrap so line breaks are preserved and give it a border for readability -->
-        <pre id="worldOutput" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 4px; margin-top: 4px; background: #f7f7f7;"></pre>
+        <pre id="worldOutput" class="panel-output"></pre>
     </section>
-    <section id="controls">
+    <section id="controls" class="panel">
+        <h2>Sector Generator</h2>
         <label for="bitDepth">Levels
             <!-- Allow up to 16 discrete levels. 2 = black/white; 16 = 16 greys. -->
             <input type="range" id="bitDepth" min="2" max="16" value="16">
@@ -118,19 +118,21 @@
             <input type="text" id="seedInput" size="10" placeholder="(auto)">
         </label>
         <span id="seedDisplay"></span>
-        <button id="randomizeSeed">Randomize seed</button>
-        <button id="generate">Generate from seed</button>
-        <!-- Download the entire sector at high resolution -->
-        <button id="download">Download sector PNG</button>
-        <!-- Button to download a selected subsector; hidden until a subsector is clicked -->
-        <button id="downloadSubsector" style="display:none;">Download subsector PNG</button>
+        <div class="button-row">
+            <button id="randomizeSeed">Randomize seed</button>
+            <button id="generate">Generate from seed</button>
+            <!-- Download the entire sector at high resolution -->
+            <button id="download">Download sector PNG</button>
+            <!-- Button to download a selected subsector; hidden until a subsector is clicked -->
+            <button id="downloadSubsector" class="is-hidden">Download subsector PNG</button>
+        </div>
     </section>
     <div id="canvasWrapper">
         <canvas id="heatmapCanvas" width="800" height="800">
             Your browser does not support the HTML5 canvas element.
         </canvas>
         <!-- Tooltip for world details; positioned absolutely and hidden by default -->
-        <div id="tooltip" style="position:absolute; display:none; pointer-events:none; background-color:rgba(255,255,255,0.95); border:1px solid #333; border-radius:4px; padding:4px; font-size:12px; z-index:10;"></div>
+        <div id="tooltip" class="tooltip"></div>
     </div>
     <footer>
         <p>
