@@ -58,8 +58,8 @@ h2 {
 
 #controls {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    align-items: center;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    align-items: start;
     gap: 1rem 1.5rem;
 }
 
@@ -68,6 +68,32 @@ h2 {
     align-items: center;
     gap: 0.75rem;
     font-weight: 600;
+    color: #374151;
+}
+
+#controls .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+#controls .control-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+#controls .control-group__label {
+    font-weight: 600;
+    color: #374151;
+}
+
+#controls .control-option {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-weight: 500;
     color: #374151;
 }
 

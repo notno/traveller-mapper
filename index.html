@@ -28,7 +28,7 @@
         </p>
     </header>
     <!-- Single World Generator section -->
-    <section id="worldGenSection">
+    <section id="worldGenSection" class="panel">
         <h2>Single World Generator</h2>
         <button id="generateWorldBtn">Generate World</button>
         <!-- Output area for single world details.  Use pre-wrap so line breaks are preserved and give it a border for readability -->
@@ -36,88 +36,113 @@
     </section>
     <section id="controls" class="panel">
         <h2>Sector Generator</h2>
-        <label for="bitDepth">Levels
-            <!-- Allow up to 16 discrete levels. 2 = black/white; 16 = 16 greys. -->
-            <input type="range" id="bitDepth" min="2" max="16" value="16">
-        </label>
-        <span id="bitDepthValue">16</span>
-        <!-- Zoom control: allow users to scale the canvas for readability -->
-        <label for="zoom">Zoom
-            <input type="range" id="zoom" min="0.5" max="4" step="0.1" value="1">
-        </label>
-        <span id="zoomValue">1.0×</span>
-        <!-- Simulation scale: adjust agent sensor distance and speed to affect pattern scale -->
-        <label for="simScale">Simulation scale
-            <!-- Cap the simulation scale slider at 1.0.  Values above 1 produce
-                 patterns that are too sparse, so we limit the maximum to 1.0. -->
-            <input type="range" id="simScale" min="0.5" max="1" step="0.1" value="1">
-        </label>
-        <span id="simScaleValue">1.0</span>
-        <!-- Saturate slider: biases the distribution of density values.
-             Values above 1 lighten the map (increase the likelihood of brighter values);
-             values below 1 darken it. -->
-        <label for="saturate">Saturate
-            <!-- Increase the maximum saturate value to 5 to allow brighter maps and more +1s -->
-            <input type="range" id="saturate" min="0.5" max="5" step="0.1" value="1">
-        </label>
-        <span id="saturateValue">1.0</span>
-        <!-- Display mode toggle: choose between raw density levels and world occurrence DM -->
-        <span id="displayModeLabel">Display</span>
-        <label>
-            <input type="radio" name="displayMode" value="density"> Density
-        </label>
-        <label>
-            <input type="radio" name="displayMode" value="dm" checked> World DM
-        </label>
-
-        <!-- Presence threshold: when display mode is Density, this slider determines
-             whether a world is considered present in a hex.  A lower threshold
-             means even dim areas count as worlds; a higher threshold restricts
-             worlds to the brightest regions.  Threshold values range from 1 to
-             the current number of quantisation levels. -->
-        <label for="presenceThreshold">World&nbsp;presence
-            <input type="range" id="presenceThreshold" min="1" max="16" value="8">
-        </label>
-        <span id="presenceThresholdValue">8</span>
-
-        <!-- Toggle subsector boundary visibility -->
-        <label>
-            <input type="checkbox" id="showBoundaries" checked> Boundaries
-        </label>
-
-        <!-- Whole world generation: when checked, generates a Traveller-style world
-             for every hex that meets the presence threshold and displays its
-             UWP code on the map. -->
-        <label>
-            <input type="checkbox" id="wholeWorlds"> Whole world generation
-        </label>
-
-        <!-- Map mode toggle: choose between a single 4×4 subsector sector (default)
-             and a larger multi-sector view.  In vastness mode the generator
-             displays an expanded grid of subsectors to simulate contiguous
-             sectors. -->
-        <span id="mapModeLabel">Map mode</span>
-        <label>
-            <input type="radio" name="mapMode" value="single" checked> Single
-        </label>
-        <label>
-            <input type="radio" name="mapMode" value="vastness"> Vastness
-        </label>
-
-        <!-- Printable mode: when checked, cells are rendered with dot patterns instead of solid greys. -->
-        <label for="printable">Printable
-            <input type="checkbox" id="printable">
-        </label>
-
-        <!-- Seed input and display: shows the current random seed and allows
-             the user to enter a seed to regenerate a previous map.  If the
-             input is left blank when generating a new map, a new random
-             seed will be chosen automatically.  The current seed is
-             displayed in this box after generation. -->
-        <label for="seedInput">Seed
-            <input type="text" id="seedInput" size="10" placeholder="(auto)">
-        </label>
-        <span id="seedDisplay"></span>
+        <div class="control-group">
+            <div class="control-row">
+                <label for="bitDepth">Levels
+                    <!-- Allow up to 16 discrete levels. 2 = black/white; 16 = 16 greys. -->
+                    <input type="range" id="bitDepth" min="2" max="16" value="16">
+                </label>
+                <span id="bitDepthValue">16</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <div class="control-row">
+                <!-- Simulation scale: adjust agent sensor distance and speed to affect pattern scale -->
+                <label for="simScale">Simulation scale
+                    <!-- Cap the simulation scale slider at 1.0.  Values above 1 produce
+                         patterns that are too sparse, so we limit the maximum to 1.0. -->
+                    <input type="range" id="simScale" min="0.5" max="1" step="0.1" value="1">
+                </label>
+                <span id="simScaleValue">1.0</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <div class="control-row">
+                <!-- Zoom control: allow users to scale the canvas for readability -->
+                <label for="zoom">Zoom
+                    <input type="range" id="zoom" min="0.5" max="4" step="0.1" value="1">
+                </label>
+                <span id="zoomValue">1.0×</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <div class="control-row">
+                <!-- Saturate slider: biases the distribution of density values.
+                     Values above 1 lighten the map (increase the likelihood of brighter values);
+                     values below 1 darken it. -->
+                <label for="saturate">Saturate
+                    <!-- Increase the maximum saturate value to 5 to allow brighter maps and more +1s -->
+                    <input type="range" id="saturate" min="0.5" max="5" step="0.1" value="1">
+                </label>
+                <span id="saturateValue">1.0</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <!-- Display mode toggle: choose between raw density levels and world occurrence DM -->
+            <span id="displayModeLabel" class="control-group__label">Display</span>
+            <label class="control-option">
+                <input type="radio" name="displayMode" value="density"> Density
+            </label>
+            <label class="control-option">
+                <input type="radio" name="displayMode" value="dm" checked> World DM
+            </label>
+        </div>
+        <div class="control-group">
+            <div class="control-row">
+                <!-- Presence threshold: when display mode is Density, this slider determines
+                     whether a world is considered present in a hex.  A lower threshold
+                     means even dim areas count as worlds; a higher threshold restricts
+                     worlds to the brightest regions.  Threshold values range from 1 to
+                     the current number of quantisation levels. -->
+                <label for="presenceThreshold">World&nbsp;presence
+                    <input type="range" id="presenceThreshold" min="1" max="16" value="8">
+                </label>
+                <span id="presenceThresholdValue">8</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <!-- Map mode toggle: choose between a single 4×4 subsector sector (default)
+                 and a larger multi-sector view.  In vastness mode the generator
+                 displays an expanded grid of subsectors to simulate contiguous
+                 sectors. -->
+            <span id="mapModeLabel" class="control-group__label">Map mode</span>
+            <label class="control-option">
+                <input type="radio" name="mapMode" value="single" checked> Single
+            </label>
+            <label class="control-option">
+                <input type="radio" name="mapMode" value="vastness"> Vastness
+            </label>
+        </div>
+        <div class="control-group">
+            <span class="control-group__label">Overlays</span>
+            <!-- Toggle subsector boundary visibility -->
+            <label class="control-option">
+                <input type="checkbox" id="showBoundaries" checked> Boundaries
+            </label>
+            <!-- Whole world generation: when checked, generates a Traveller-style world
+                 for every hex that meets the presence threshold and displays its
+                 UWP code on the map. -->
+            <label class="control-option">
+                <input type="checkbox" id="wholeWorlds"> Whole world generation
+            </label>
+            <!-- Printable mode: when checked, cells are rendered with dot patterns instead of solid greys. -->
+            <label class="control-option" for="printable">
+                <input type="checkbox" id="printable"> Printable
+            </label>
+        </div>
+        <div class="control-group">
+            <!-- Seed input and display: shows the current random seed and allows
+                 the user to enter a seed to regenerate a previous map.  If the
+                 input is left blank when generating a new map, a new random
+                 seed will be chosen automatically.  The current seed is
+                 displayed in this box after generation. -->
+            <div class="control-row">
+                <label for="seedInput">Seed
+                    <input type="text" id="seedInput" size="10" placeholder="(auto)">
+                </label>
+                <span id="seedDisplay"></span>
+            </div>
+        </div>
         <div class="button-row">
             <button id="randomizeSeed">Randomize seed</button>
             <button id="generate">Generate from seed</button>
