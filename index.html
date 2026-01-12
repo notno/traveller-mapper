@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Star Density Heat Map Generator</title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- Remove nonexistent styles file; optionally you can add your own CSS file -->
+    <!-- <link rel="stylesheet" href="style.css"> -->
+    <!-- Load world generation logic before the main script -->
+    <script defer src="worldgen.js"></script>
     <script defer src="script.js"></script>
 </head>
 <body>
@@ -25,6 +28,13 @@
             making it suitable for overlaying or further compositing.
         </p>
     </header>
+    <!-- Single World Generator section -->
+    <section id="worldGenSection">
+        <h2>Single World Generator</h2>
+        <button id="generateWorldBtn">Generate World</button>
+        <!-- Output area for single world details.  Use pre-wrap so line breaks are preserved and give it a border for readability -->
+        <pre id="worldOutput" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 4px; margin-top: 4px; background: #f7f7f7;"></pre>
+    </section>
     <section id="controls">
         <label for="bitDepth">Levels
             <!-- Allow up to 16 discrete levels. 2 = black/white; 16 = 16 greys. -->
@@ -60,6 +70,40 @@
             <input type="radio" name="displayMode" value="dm" checked> World DM
         </label>
 
+        <!-- Presence threshold: when display mode is Density, this slider determines
+             whether a world is considered present in a hex.  A lower threshold
+             means even dim areas count as worlds; a higher threshold restricts
+             worlds to the brightest regions.  Threshold values range from 1 to
+             the current number of quantisation levels. -->
+        <label for="presenceThreshold">World&nbsp;presence
+            <input type="range" id="presenceThreshold" min="1" max="16" value="8">
+        </label>
+        <span id="presenceThresholdValue">8</span>
+
+        <!-- Toggle subsector boundary visibility -->
+        <label>
+            <input type="checkbox" id="showBoundaries" checked> Boundaries
+        </label>
+
+        <!-- Whole world generation: when checked, generates a Traveller-style world
+             for every hex that meets the presence threshold and displays its
+             UWP code on the map. -->
+        <label>
+            <input type="checkbox" id="wholeWorlds"> Whole world generation
+        </label>
+
+        <!-- Map mode toggle: choose between a single 4×4 subsector sector (default)
+             and a larger multi-sector view.  In vastness mode the generator
+             displays an expanded grid of subsectors to simulate contiguous
+             sectors. -->
+        <span id="mapModeLabel">Map mode</span>
+        <label>
+            <input type="radio" name="mapMode" value="single" checked> Single
+        </label>
+        <label>
+            <input type="radio" name="mapMode" value="vastness"> Vastness
+        </label>
+
         <!-- Printable mode: when checked, cells are rendered with dot patterns instead of solid greys. -->
         <label for="printable">Printable
             <input type="checkbox" id="printable">
@@ -85,6 +129,8 @@
         <canvas id="heatmapCanvas" width="800" height="800">
             Your browser does not support the HTML5 canvas element.
         </canvas>
+        <!-- Tooltip for world details; positioned absolutely and hidden by default -->
+        <div id="tooltip" style="position:absolute; display:none; pointer-events:none; background-color:rgba(255,255,255,0.95); border:1px solid #333; border-radius:4px; padding:4px; font-size:12px; z-index:10;"></div>
     </div>
     <footer>
         <p>

@@ -13,6 +13,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('heatmapCanvas');
     const ctx = canvas.getContext('2d');
+
+    // Temporary global error handler for debugging.  Any uncaught
+    // exceptions will be displayed on the page.  Remove or comment out in production.
+    window.addEventListener('error', (e) => {
+        const pre = document.createElement('pre');
+        pre.style.color = 'red';
+        pre.textContent = 'Error: ' + e.message;
+        document.body.appendChild(pre);
+    });
     const bitDepthSlider = document.getElementById('bitDepth');
     const bitDepthValue = document.getElementById('bitDepthValue');
     const generateBtn = document.getElementById('generate');
@@ -40,17 +49,73 @@ document.addEventListener('DOMContentLoaded', () => {
     // Printable mode checkbox
     const printableCheckbox = document.getElementById('printable');
 
+    // Initialise state flags before any UI components are bound.  These
+    // variables need to exist prior to event binding because the listeners
+    // reference them.  Defining them here avoids reference errors
+    // caused by temporal dead zones when using `let` declarations.
+    let showBoundaries = true;
+    let generateWholeWorlds = false;
+    let worlds = [];
+
+    // Presence threshold controls
+    const presenceSlider = document.getElementById('presenceThreshold');
+    const presenceValue = document.getElementById('presenceThresholdValue');
+    // Map mode radio buttons
+    const mapModeRadios = document.querySelectorAll('input[name="mapMode"]');
+
+    // Subsector boundary visibility checkbox
+    const boundaryCheckbox = document.getElementById('showBoundaries');
+    if (boundaryCheckbox) {
+        boundaryCheckbox.checked = showBoundaries;
+        boundaryCheckbox.addEventListener('change', () => {
+            showBoundaries = boundaryCheckbox.checked;
+            drawHexGrid();
+        });
+    }
+
+    // Whole world generation checkbox
+    const wholeWorldCheckbox = document.getElementById('wholeWorlds');
+    if (wholeWorldCheckbox) {
+        wholeWorldCheckbox.addEventListener('change', () => {
+            generateWholeWorlds = wholeWorldCheckbox.checked;
+            // Redraw to display or hide UWP codes
+            drawHexGrid();
+        });
+    }
+
+    // Single world generator controls
+    const generateWorldBtn = document.getElementById('generateWorldBtn');
+    const worldOutput = document.getElementById('worldOutput');
+    if (generateWorldBtn) {
+        generateWorldBtn.addEventListener('click', () => {
+            const world = generateWorld();
+            const uwpStr = worldToUWP(world);
+            worldOutput.textContent = uwpStr + '\n' + formatWorldInfo(world);
+        });
+    }
+
+    // Tooltip functionality has been disabled.  Previously, world details were
+    // shown on mouseover, but the user requested that detailed information
+    // instead be displayed on the map itself.  We still keep a reference
+    // to the tooltip element in case future features need it, but no
+    // mousemove or mouseleave handlers are registered here.
+    const tooltipEl = document.getElementById('tooltip');
+    // Ensure tooltip is hidden by default
+    if (tooltipEl) {
+        tooltipEl.style.display = 'none';
+    }
+
     // Hex grid configuration
     // Each subsector contains a fixed number of columns and rows of hexes
-    const subCols = 8;    // columns per subsector (west–east)
-    const subRows = 10;   // rows per subsector (north–south)
+    let subCols = 8;    // columns per subsector (west–east)
+    let subRows = 10;   // rows per subsector (north–south)
     // A sector is comprised of multiple subsectors.  Adjust these values to
     // control how many subsectors appear horizontally and vertically.
-    const subSectorCols = 4; // number of subsectors across
-    const subSectorRows = 4; // number of subsectors down
+    let subSectorCols = 4; // number of subsectors across
+    let subSectorRows = 4; // number of subsectors down
     // Total number of columns and rows in the entire sector
-    const cols = subCols * subSectorCols;
-    const rows = subRows * subSectorRows;
+    let cols = subCols * subSectorCols;
+    let rows = subRows * subSectorRows;
     // Maximum canvas dimensions used to scale the grid.  The drawing code
     // computes an appropriate hex side length so that the entire sector
     // fits within these bounds.  Feel free to increase these values for
@@ -90,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSideLen = 0;
     // Simulation scale factor controlling agent sensor distance and step size
     let simulationScale = 1.0;
-    // Display mode: 'density' shows 1..n levels; 'dm' shows world occurrence DM values
+    // Display mode: 'density' shows world presence; 'dm' shows world occurrence DM values
     let displayMode = 'dm';
     // Saturate factor: controls brightness bias.  >1 brightens, <1 darkens.
     let saturateFactor = 1.0;
@@ -99,6 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // instead of solid greys.  This makes the map more suitable for
     // black‑and‑white printing.  Default is false.
     let printableMode = false;
+    // showBoundaries, generateWholeWorlds and worlds are declared earlier near the
+    // top of the DOMContentLoaded handler.
 
     // Seeded random number generator state.  To reproduce patterns, we use a
     // simple linear congruential generator (LCG) instead of Math.random()
@@ -106,6 +173,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // current map.  rngState stores the internal state of the LCG.
     let currentSeed = 0;
     let rngState = 0;
+
+    // Presence threshold: minimum quantised level (1‑indexed) for a world to be present
+    let presenceThresholdVal = parseInt(presenceSlider.value, 10);
+    // Map mode: 'single' for a 4x4 sector; 'vastness' for an expanded sector
+    let mapMode = 'single';
 
     /**
      * Update the encoded seed string displayed in the seed input and
@@ -148,6 +220,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // LCG parameters: same as in glibc
         rngState = (rngState * 1664525 + 1013904223) >>> 0;
         return rngState / 4294967296;
+    }
+
+    // Expose the seeded RNG to worldgen.js so that world generation can
+    // consume the same deterministic random numbers.  If window.seededRandom
+    // is already defined we overwrite it to ensure consistency.
+    if (typeof window !== 'undefined') {
+        window.seededRandom = seededRandom;
     }
 
     /**
@@ -453,40 +532,92 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = `rgba(0, 0, 0, ${borderOpacity})`;
                 ctx.lineWidth = 0.5;
                 ctx.stroke();
-                // Determine the text to display at the centre of the hex.
-                let displayText;
+                // Compute world presence and generate world if needed
+                const worldPresent = (level + 1) >= presenceThresholdVal;
+                let primaryText = '';
+                let secondaryText = '';
+                let tertiaryText = '';
+                let tertiaryColour = null;
+                // Generate or retrieve the world for this cell if whole‑world mode is enabled
+                if (generateWholeWorlds && worldPresent) {
+                    if (!worlds[index]) {
+                        worlds[index] = generateWorld();
+                    }
+                    const world = worlds[index];
+                    secondaryText = worldToUWP(world);
+                    // Construct tertiary text from trade codes and base codes
+                    const codes = [];
+                    if (world.tradeCodes && world.tradeCodes.length > 0) {
+                        codes.push(...world.tradeCodes);
+                    }
+                    if (world.bases && world.bases.length > 0) {
+                        codes.push(...world.bases);
+                    }
+                    if (codes.length > 0) {
+                        tertiaryText = codes.join(' ');
+                        // Determine colour of tertiary text: if any trade code is in the red list, colour red; else if any in amber, colour orange.
+                        const redCodes = ['In', 'Hi', 'Ht', 'Va', 'Ri'];
+                        const amberCodes = ['Ag', 'As', 'Ba', 'De', 'Fl', 'Ic', 'Na', 'Ni', 'Lo', 'Lt', 'Po', 'Wa', 'Ga'];
+                        if (world.tradeCodes && world.tradeCodes.some(tc => redCodes.includes(tc))) {
+                            tertiaryColour = 'red';
+                        } else if (world.tradeCodes && world.tradeCodes.some(tc => amberCodes.includes(tc))) {
+                            tertiaryColour = 'orange';
+                        }
+                    }
+                }
                 if (displayMode === 'dm') {
-                    // Map the quantised level into four bands corresponding
-                    // to DM modifiers -2, -1, 0, +1.  Divide the level
-                    // range into four equal regions, clamp to [0,3], then
-                    // convert to a string.  Zero and positive values are
-                    // prefixed with a plus sign per user request.
+                    // Map the quantised level into four bands corresponding to DM modifiers
                     const quartSize = levels / 4;
                     let region = Math.floor(level / quartSize);
                     if (region < 0) region = 0;
                     if (region > 3) region = 3;
                     const dmValue = -2 + region;
                     if (dmValue > 0) {
-                        displayText = `+${dmValue}`;
+                        primaryText = `+${dmValue}`;
                     } else if (dmValue === 0) {
-                        displayText = '+0';
+                        primaryText = '+0';
                     } else {
-                        displayText = dmValue.toString();
+                        primaryText = dmValue.toString();
                     }
                 } else {
-                    // Show density level as 1‑indexed
-                    displayText = (level + 1).toString();
+                    // Density mode: show a star when no world code is displayed
+                    if (!secondaryText) {
+                        primaryText = worldPresent ? '★' : '';
+                    }
                 }
-                // Use white text on dark backgrounds and black on light backgrounds
-                // In printable mode the background is white/transparent, so
-                // always use a dark colour for the DM text.  Otherwise
-                // choose black on light greys and white on dark greys.
+                // Choose text colour: black on light greys, white on dark greys, dark in printable mode
                 const densityColour = printableMode ? '#000' : ((gray > 128) ? '#000' : '#fff');
                 ctx.fillStyle = densityColour;
-                ctx.font = `${(sideLen * 0.35).toFixed(2)}px sans-serif`;
                 ctx.textAlign = 'center';
+                // Draw primary text at the centre
+                ctx.font = `${(sideLen * 0.35).toFixed(2)}px sans-serif`;
                 ctx.textBaseline = 'middle';
-                ctx.fillText(displayText, cx, cy);
+                ctx.fillText(primaryText, cx, cy);
+                // Draw secondary text (world code) below the primary text if present.
+                // Increase vertical offsets to prevent overlap with tertiary text.  Use
+                // larger fractional offsets from the centre; adjust tertiary Y accordingly.
+                let currentY = cy;
+                if (secondaryText) {
+                    ctx.font = `${(sideLen * 0.25).toFixed(2)}px monospace`;
+                    ctx.textBaseline = 'top';
+                    // Position the UWP code further down from centre to allow more room for tertiary text
+                    const secondaryY = cy + sideLen * 0.35;
+                    ctx.fillText(secondaryText, cx, secondaryY);
+                    currentY = secondaryY;
+                }
+                // Draw tertiary text (trade/base codes) below the secondary text
+                if (tertiaryText) {
+                    // Set colour based on classification; default to densityColour
+                    ctx.fillStyle = tertiaryColour || densityColour;
+                    ctx.font = `${(sideLen * 0.20).toFixed(2)}px monospace`;
+                    ctx.textBaseline = 'top';
+                    // If secondary text exists, position tertiary further down to avoid overlap.
+                    // Otherwise, position tertiary text at a moderate offset below centre.
+                    const tertiaryY = secondaryText ? cy + sideLen * 0.58 : cy + sideLen * 0.35;
+                    ctx.fillText(tertiaryText, cx, tertiaryY);
+                    // Reset colour for subsequent drawing
+                    ctx.fillStyle = densityColour;
+                }
                 // Draw coordinate label at the top of the hex.  Coordinates are
                 // 2‑digit column followed by 2‑digit row numbers (01–08, 01–10).
                 // Compute local coordinates for the subsector.  The user
@@ -518,8 +649,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // subsector), draw their bottom edges.  This produces a zigzag
         // boundary that follows the hex geometry.  Boundary colour
         // matches the previous blue used for straight lines.
-        ctx.strokeStyle = '#0088CC';
-        const boundaryWidth = 2;
+        // Set boundary colour and width based on toggle.  When boundaries
+        // are hidden, use a fully transparent colour and zero width so
+        // nothing is drawn.
+        const boundaryColour = showBoundaries ? '#0088CC' : 'rgba(0,0,0,0)';
+        ctx.strokeStyle = boundaryColour;
+        const boundaryWidth = showBoundaries ? 2 : 0;
         // loop again to draw boundary edges
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
@@ -652,6 +787,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setSeed(currentSeed);
         // Initialise the global cell intensities array for the entire sector
         cellIntensities = new Array(cols * rows).fill(0);
+        // Reset the worlds array to ensure fresh world generation for each cell
+        worlds = new Array(cols * rows).fill(null);
         // For each subsector, run a separate simulation and accumulate its
         // results into the global grid.  This produces varied patterns across
         // the sector while still using the Physarum algorithm within each
@@ -674,10 +811,81 @@ document.addEventListener('DOMContentLoaded', () => {
         drawHexGrid();
     }
 
+    // Convert a Traveller world object into an 8‑character UWP code.  Uses
+    // hexadecimal notation for numeric fields (0–15).  Starport letter
+    // appears first followed by size, atmosphere, hydrographics,
+    // population, government, law and tech level.
+    function worldToUWP(world) {
+        function toHex(n) {
+            const clamped = Math.max(0, Math.min(15, n));
+            return clamped.toString(16).toUpperCase();
+        }
+        // Construct the base UWP string
+        let uwp = `${world.starport}${toHex(world.size)}${toHex(world.atmosphere)}${toHex(world.hydrographics)}${toHex(world.population)}${toHex(world.government)}${toHex(world.law)}${toHex(world.techLevel)}`;
+        // If a gas giant is present in the system, append an asterisk after the
+        // tech level to indicate it【435193721292873†L21-L30】.
+        if (world.gasGiant) {
+            uwp += '*';
+        }
+        return uwp;
+    }
+
+    // Format world information into a multi-line string for tooltips and the
+    // single world generator output.  Includes the UWP, starport, size,
+    // atmosphere, hydrographics, population, government, law level, tech
+    // level, trade codes and bases if present.
+    function formatWorldInfo(world) {
+        const lines = [];
+        lines.push(`UWP: ${worldToUWP(world)}`);
+        lines.push(`Starport: ${world.starport}`);
+        lines.push(`Size: ${world.size}`);
+        lines.push(`Atmosphere: ${world.atmosphere}`);
+        lines.push(`Hydrographics: ${world.hydrographics}`);
+        lines.push(`Population: ${world.population}`);
+        lines.push(`Government: ${world.government}`);
+        lines.push(`Law: ${world.law}`);
+        lines.push(`Tech Level: ${world.techLevel}`);
+        // Indicate gas giant presence
+        lines.push(`Gas Giant: ${world.gasGiant ? 'Yes' : 'No'}`);
+        if (world.tradeCodes && world.tradeCodes.length > 0) {
+            lines.push(`Trade Codes: ${world.tradeCodes.join(', ')}`);
+        }
+        if (world.bases && world.bases.length > 0) {
+            lines.push(`Bases: ${world.bases.join(', ')}`);
+        }
+        return lines.join('\n');
+    }
+
+    // Approximate mapping from world-space (canvas) coordinates to hex grid
+    // coordinates.  Returns an object with row and col or null if outside the grid.
+    function getHexAtPoint(px, py) {
+        const sqrt3 = Math.sqrt(3);
+        const sideLen = currentSideLen;
+        const horizSpacing = 1.5 * sideLen;
+        const verticalSpacing = sqrt3 * sideLen;
+        // Compute approximate column based on x coordinate.
+        const approxCol = Math.floor((px - sideLen) / horizSpacing);
+        if (approxCol < 0 || approxCol >= cols) return null;
+        // Determine the offset for odd columns
+        const offsetRows = (approxCol % 2) * 0.5;
+        // Compute approximate row based on y coordinate.
+        const approxRow = Math.floor((py - (offsetRows * verticalSpacing) - (sideLen * sqrt3 / 2)) / verticalSpacing);
+        if (approxRow < 0 || approxRow >= rows) return null;
+        return { col: approxCol, row: approxRow };
+    }
+
     // Update bit depth display and redraw when slider moves.  Also update
     // the encoded seed prefix to reflect the new level.
     bitDepthSlider.addEventListener('input', () => {
         bitDepthValue.textContent = bitDepthSlider.value;
+        // Update presence slider max to reflect new number of levels
+        presenceSlider.max = bitDepthSlider.value;
+        // Clamp threshold if it exceeds new max
+        if (presenceThresholdVal > parseInt(bitDepthSlider.value, 10)) {
+            presenceThresholdVal = parseInt(bitDepthSlider.value, 10);
+            presenceSlider.value = presenceThresholdVal;
+            presenceValue.textContent = presenceThresholdVal.toString();
+        }
         drawHexGrid();
         updateEncodedSeedString();
     });
@@ -698,6 +906,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isNaN(lvl)) {
                 bitDepthSlider.value = lvl;
                 bitDepthValue.textContent = lvl.toString();
+                presenceSlider.max = lvl;
+                if (presenceThresholdVal > lvl) {
+                    presenceThresholdVal = lvl;
+                    presenceSlider.value = presenceThresholdVal;
+                    presenceValue.textContent = presenceThresholdVal.toString();
+                }
             }
             // Update simulation scale
             const sc = parseFloat(scale);
@@ -820,6 +1034,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial render
     bitDepthValue.textContent = bitDepthSlider.value;
+    presenceValue.textContent = presenceSlider.value;
     // Generate the first map automatically when the page loads.  Use a
     // random seed and store it so users can reproduce the pattern later.
     currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
@@ -905,6 +1120,45 @@ document.addEventListener('DOMContentLoaded', () => {
             // Redraw grid with new labels (no need to regenerate simulation)
             drawHexGrid();
             updateEncodedSeedString();
+        });
+    });
+
+    // Presence threshold slider: update threshold and redraw grid
+    presenceSlider.addEventListener('input', () => {
+        presenceThresholdVal = parseInt(presenceSlider.value, 10);
+        presenceValue.textContent = presenceSlider.value;
+        drawHexGrid();
+    });
+
+    // Map mode radio: switch between single and vastness sectors
+    mapModeRadios.forEach((radio) => {
+        radio.addEventListener('change', (event) => {
+            mapMode = event.target.value;
+            if (mapMode === 'single') {
+                subSectorCols = 4;
+                subSectorRows = 4;
+            } else {
+                // Expand to a larger sector: 8×6 subsectors for vastness
+                subSectorCols = 8;
+                subSectorRows = 6;
+            }
+            // Recalculate totals
+            cols = subCols * subSectorCols;
+            rows = subRows * subSectorRows;
+            // Reset selected subsector and hide download button
+            selectedSubsector = null;
+            downloadSubsectorBtn.style.display = 'none';
+            // Resize the intensities array
+            cellIntensities = new Array(cols * rows).fill(0);
+            // Regenerate map with new dimensions
+            generateMap();
+            // Update presence slider max based on bit depth (unchanged) but clamp threshold
+            presenceSlider.max = bitDepthSlider.value;
+            if (presenceThresholdVal > parseInt(bitDepthSlider.value, 10)) {
+                presenceThresholdVal = parseInt(bitDepthSlider.value, 10);
+                presenceSlider.value = presenceThresholdVal;
+                presenceValue.textContent = presenceThresholdVal.toString();
+            }
         });
     });
 
@@ -1006,14 +1260,72 @@ document.addEventListener('DOMContentLoaded', () => {
                         displayTextExp = dmValue.toString();
                     }
                 } else {
-                    displayTextExp = (level + 1).toString();
+                    // Presence mode for export: star if level meets threshold
+                    const worldPresent = (level + 1) >= presenceThresholdVal;
+                    displayTextExp = worldPresent ? '★' : '';
                 }
+                // Draw DM/star as primary text at centre
                 const densityColour = printableMode ? '#000' : ((gray > 128) ? '#000' : '#fff');
                 offCtx.fillStyle = densityColour;
-                offCtx.font = `${(sideLenExp * 0.35).toFixed(2)}px sans-serif`;
                 offCtx.textAlign = 'center';
                 offCtx.textBaseline = 'middle';
+                offCtx.font = `${(sideLenExp * 0.35).toFixed(2)}px sans-serif`;
                 offCtx.fillText(displayTextExp, cx, cy);
+                // Prepare secondary and tertiary text (UWP and codes) if whole-world generation is active
+                let secondaryTextExp = '';
+                let tertiaryTextExp = '';
+                let tertiaryColourExp = null;
+                // Determine world presence based on threshold
+                const worldPresentExp = (level + 1) >= presenceThresholdVal;
+                if (generateWholeWorlds && worldPresentExp) {
+                    // Generate or retrieve world for this cell
+                    if (!worlds[index]) {
+                        worlds[index] = generateWorld();
+                    }
+                    const world = worlds[index];
+                    // Compose UWP code (includes gas giant marker)
+                    secondaryTextExp = worldToUWP(world);
+                    // Compose trade and base codes
+                    const codes = [];
+                    if (world.tradeCodes && world.tradeCodes.length > 0) {
+                        codes.push(...world.tradeCodes);
+                    }
+                    if (world.bases && world.bases.length > 0) {
+                        codes.push(...world.bases);
+                    }
+                    if (codes.length > 0) {
+                        tertiaryTextExp = codes.join(' ');
+                        // Determine tertiary colour based on trade codes
+                        const redCodes = ['In', 'Hi', 'Ht', 'Va', 'Ri'];
+                        const amberCodes = ['Ag', 'As', 'Ba', 'De', 'Fl', 'Ic', 'Na', 'Ni', 'Lo', 'Lt', 'Po', 'Wa', 'Ga'];
+                        if (world.tradeCodes && world.tradeCodes.some(tc => redCodes.includes(tc))) {
+                            tertiaryColourExp = 'red';
+                        } else if (world.tradeCodes && world.tradeCodes.some(tc => amberCodes.includes(tc))) {
+                            tertiaryColourExp = 'orange';
+                        }
+                    }
+                }
+                // Draw secondary text (UWP code) if present
+                if (secondaryTextExp) {
+                    offCtx.font = `${(sideLenExp * 0.25).toFixed(2)}px monospace`;
+                    offCtx.textBaseline = 'top';
+                    // Position UWP code further down from centre
+                    const secondaryYExp = cy + sideLenExp * 0.35;
+                    offCtx.fillStyle = densityColour;
+                    offCtx.fillText(secondaryTextExp, cx, secondaryYExp);
+                }
+                // Draw tertiary text (trade/base codes) if present
+                if (tertiaryTextExp) {
+                    // Use custom colour if defined, otherwise reuse densityColour
+                    offCtx.fillStyle = tertiaryColourExp || densityColour;
+                    offCtx.font = `${(sideLenExp * 0.20).toFixed(2)}px monospace`;
+                    offCtx.textBaseline = 'top';
+                    // Position tertiary text below secondary or moderate offset
+                    const tertiaryYExp = secondaryTextExp ? cy + sideLenExp * 0.58 : cy + sideLenExp * 0.35;
+                    offCtx.fillText(tertiaryTextExp, cx, tertiaryYExp);
+                    // Reset fillStyle for subsequent drawing
+                    offCtx.fillStyle = densityColour;
+                }
                 // Coordinate label
                 // Use local coordinates within the subsector for labels
                 const localCol = (col % subCols) + 1;
@@ -1024,71 +1336,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 offCtx.fillStyle = '#FF6600';
                 offCtx.font = `${(sideLenExp * 0.25).toFixed(2)}px sans-serif`;
                 const coordY = cy - sideLenExp * 0.6;
+                offCtx.textBaseline = 'middle';
                 offCtx.fillText(coordLabel, cx, coordY);
             }
         }
-        // Draw subsector boundaries on export by highlighting hex edges instead of
-        // drawing straight lines.  The right edges of the last column in each
-        // subsector and the bottom edges of the last row in each subsector
-        // are drawn using the boundary colour.  This yields a zigzag
-        // boundary that follows the hex geometry.
-        offCtx.strokeStyle = '#0088CC';
-        offCtx.lineWidth = 2 * exportScale;
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                // Compute centre of this hex
-                const offsetRows = (col % 2) * 0.5;
-                const cx = col * horizSpacingExp + sideLenExp;
-                const cy = (row + offsetRows) * verticalSpacingExp + hexHeightExp / 2;
-                // Compute vertices
-                const verts = [];
-                for (let k = 0; k < 6; k++) {
-                    const angleRad = (Math.PI / 180) * (60 * k);
-                    const x = cx + sideLenExp * Math.cos(angleRad);
-                    const y = cy + sideLenExp * Math.sin(angleRad);
-                    verts.push({ x, y });
-                }
-                // Vertical boundary: right edges of cells where col+1 is
-                // divisible by subCols, except the last col of the sector
-                if ((col + 1) % subCols === 0 && col !== cols - 1) {
-                    // Draw two segments: v0->v1 and v0->v5
-                    offCtx.beginPath();
-                    offCtx.moveTo(verts[0].x, verts[0].y);
-                    offCtx.lineTo(verts[1].x, verts[1].y);
-                    offCtx.stroke();
-                    offCtx.beginPath();
-                    offCtx.moveTo(verts[0].x, verts[0].y);
-                    offCtx.lineTo(verts[5].x, verts[5].y);
-                    offCtx.stroke();
-                }
-                // Horizontal boundary: draw bottom edges and diagonals
-                // on the last row of each subsector.  See drawHexGrid()
-                // for the rationale.  We draw the bottom horizontal
-                // (vertex 1→2) on every boundary cell, and depending on
-                // column parity, draw the connecting diagonal: odd
-                // columns use vertex 3→2; even columns use
-                // vertex 1→0.  Skip the very bottom row.
-                const isBoundaryRowExp = (((row + 1) % subRows) === 0) && (row < rows - 1);
-                if (isBoundaryRowExp) {
-                    // Bottom horizontal
-                    offCtx.beginPath();
-                    offCtx.moveTo(verts[1].x, verts[1].y);
-                    offCtx.lineTo(verts[2].x, verts[2].y);
-                    offCtx.stroke();
-                    // Diagonal connections: odd columns draw both
-                    // bottom‑left and bottom‑right diagonals; even columns
-                    // draw none (their neighbours provide the connection).
-                    if (col % 2 === 1) {
-                        // Bottom‑left diagonal (vertex 3 → 2)
+        // Draw subsector boundaries only when boundaries are enabled.  Highlight
+        // hex edges at subsector borders to produce a zigzag boundary following the
+        // hex geometry.
+        if (showBoundaries) {
+            offCtx.strokeStyle = '#0088CC';
+            offCtx.lineWidth = 2 * exportScale;
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    // Compute centre of this hex
+                    const offsetRows = (col % 2) * 0.5;
+                    const cxBound = col * horizSpacingExp + sideLenExp;
+                    const cyBound = (row + offsetRows) * verticalSpacingExp + hexHeightExp / 2;
+                    // Compute vertices
+                    const verts = [];
+                    for (let k = 0; k < 6; k++) {
+                        const angleRad = (Math.PI / 180) * (60 * k);
+                        const vx = cxBound + sideLenExp * Math.cos(angleRad);
+                        const vy = cyBound + sideLenExp * Math.sin(angleRad);
+                        verts.push({ x: vx, y: vy });
+                    }
+                    // Vertical boundary: right edges where col+1 divisible by subCols, excluding sector's last column
+                    if ((col + 1) % subCols === 0 && col !== cols - 1) {
                         offCtx.beginPath();
-                        offCtx.moveTo(verts[3].x, verts[3].y);
-                        offCtx.lineTo(verts[2].x, verts[2].y);
+                        offCtx.moveTo(verts[0].x, verts[0].y);
+                        offCtx.lineTo(verts[1].x, verts[1].y);
                         offCtx.stroke();
-                        // Bottom‑right diagonal (vertex 1 → 0)
+                        offCtx.beginPath();
+                        offCtx.moveTo(verts[0].x, verts[0].y);
+                        offCtx.lineTo(verts[5].x, verts[5].y);
+                        offCtx.stroke();
+                    }
+                    // Horizontal boundary: bottom edges on the last row of each subsector
+                    const isBoundaryRowExp = (((row + 1) % subRows) === 0) && (row < rows - 1);
+                    if (isBoundaryRowExp) {
+                        // Bottom horizontal (vertex 1→2)
                         offCtx.beginPath();
                         offCtx.moveTo(verts[1].x, verts[1].y);
-                        offCtx.lineTo(verts[0].x, verts[0].y);
+                        offCtx.lineTo(verts[2].x, verts[2].y);
                         offCtx.stroke();
+                        // Draw diagonals only on odd columns
+                        if (col % 2 === 1) {
+                            // Bottom‑left diagonal (vertex 3→2)
+                            offCtx.beginPath();
+                            offCtx.moveTo(verts[3].x, verts[3].y);
+                            offCtx.lineTo(verts[2].x, verts[2].y);
+                            offCtx.stroke();
+                            // Bottom‑right diagonal (vertex 1→0)
+                            offCtx.beginPath();
+                            offCtx.moveTo(verts[1].x, verts[1].y);
+                            offCtx.lineTo(verts[0].x, verts[0].y);
+                            offCtx.stroke();
+                        }
                     }
                 }
             }
@@ -1181,23 +1484,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     // background transparent.  The border will be drawn
                     // below.
                 }
-                // Determine label based on display mode
+                // Determine primary label (DM or star)
                 let displayTextExp;
+                const quartSizeSub = levels / 4;
                 if (displayMode === 'dm') {
-                    const quartSize = levels / 4;
-                    let region = Math.floor(level / quartSize);
+                    let region = Math.floor(level / quartSizeSub);
                     if (region < 0) region = 0;
                     if (region > 3) region = 3;
                     const dmValue = -2 + region;
-                    if (dmValue > 0) {
-                        displayTextExp = `+${dmValue}`;
-                    } else if (dmValue === 0) {
-                        displayTextExp = '+0';
-                    } else {
-                        displayTextExp = dmValue.toString();
-                    }
+                    if (dmValue > 0) displayTextExp = `+${dmValue}`;
+                    else if (dmValue === 0) displayTextExp = '+0';
+                    else displayTextExp = dmValue.toString();
                 } else {
-                    displayTextExp = (level + 1).toString();
+                    const worldPresent = (level + 1) >= presenceThresholdVal;
+                    displayTextExp = worldPresent ? '★' : '';
                 }
                 const densityColour = printableMode ? '#000' : ((gray > 128) ? '#000' : '#fff');
                 offCtx.fillStyle = densityColour;
@@ -1205,8 +1505,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 offCtx.textAlign = 'center';
                 offCtx.textBaseline = 'middle';
                 offCtx.fillText(displayTextExp, cx, cy);
-                // Draw a thin outline around each hex for legibility.  Use
-                // a darker outline in printable mode.
+                // Prepare secondary (UWP) and tertiary (trade/base) text if whole-world mode is active
+                let secondaryTextExp = '';
+                let tertiaryTextExp = '';
+                let tertiaryColourExp = null;
+                const worldPresentExp = (level + 1) >= presenceThresholdVal;
+                if (generateWholeWorlds && worldPresentExp) {
+                    // Compute global index to look up world in worlds[]
+                    const globalRow = sy * subRows + row;
+                    const globalCol = sx * subCols + col;
+                    const globalIndex = globalRow * cols + globalCol;
+                    if (!worlds[globalIndex]) {
+                        worlds[globalIndex] = generateWorld();
+                    }
+                    const world = worlds[globalIndex];
+                    secondaryTextExp = worldToUWP(world);
+                    const codes = [];
+                    if (world.tradeCodes && world.tradeCodes.length > 0) {
+                        codes.push(...world.tradeCodes);
+                    }
+                    if (world.bases && world.bases.length > 0) {
+                        codes.push(...world.bases);
+                    }
+                    if (codes.length > 0) {
+                        tertiaryTextExp = codes.join(' ');
+                        // Determine colour for tertiary text
+                        const redCodes = ['In', 'Hi', 'Ht', 'Va', 'Ri'];
+                        const amberCodes = ['Ag', 'As', 'Ba', 'De', 'Fl', 'Ic', 'Na', 'Ni', 'Lo', 'Lt', 'Po', 'Wa', 'Ga'];
+                        if (world.tradeCodes && world.tradeCodes.some(tc => redCodes.includes(tc))) {
+                            tertiaryColourExp = 'red';
+                        } else if (world.tradeCodes && world.tradeCodes.some(tc => amberCodes.includes(tc))) {
+                            tertiaryColourExp = 'orange';
+                        }
+                    }
+                }
+                // Draw secondary text (UWP code)
+                if (secondaryTextExp) {
+                    offCtx.font = `${(sideLenExp * 0.25).toFixed(2)}px monospace`;
+                    offCtx.textBaseline = 'top';
+                    const secondaryYExp = cy + sideLenExp * 0.35;
+                    offCtx.fillStyle = densityColour;
+                    offCtx.fillText(secondaryTextExp, cx, secondaryYExp);
+                }
+                // Draw tertiary text (trade/base codes)
+                if (tertiaryTextExp) {
+                    offCtx.fillStyle = tertiaryColourExp || densityColour;
+                    offCtx.font = `${(sideLenExp * 0.20).toFixed(2)}px monospace`;
+                    offCtx.textBaseline = 'top';
+                    const tertiaryYExp = secondaryTextExp ? cy + sideLenExp * 0.58 : cy + sideLenExp * 0.35;
+                    offCtx.fillText(tertiaryTextExp, cx, tertiaryYExp);
+                    // Reset fillStyle for coordinate labels
+                    offCtx.fillStyle = densityColour;
+                }
+                // Draw a thin outline around each hex for legibility.
                 {
                     const borderOpacityCell = printableMode ? 0.6 : 0.3;
                     offCtx.strokeStyle = `rgba(0, 0, 0, ${borderOpacityCell})`;
@@ -1223,10 +1574,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 offCtx.fillText(coordLabel, cx, coordY);
             }
         }
-        // Draw border around the subsector
-        offCtx.strokeStyle = '#0088CC';
-        offCtx.lineWidth = 2 * exportScale;
-        offCtx.strokeRect(0, 0, canvasW, canvasH);
+        // Draw border around the subsector only if boundaries are enabled
+        if (showBoundaries) {
+            offCtx.strokeStyle = '#0088CC';
+            offCtx.lineWidth = 2 * exportScale;
+            offCtx.strokeRect(0, 0, canvasW, canvasH);
+        }
         // Trigger download as PNG for transparency
         const dataURL = off.toDataURL('image/png');
         const link = document.createElement('a');
