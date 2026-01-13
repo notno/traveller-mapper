@@ -103,11 +103,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let subRows = 10;   // rows per subsector (north–south)
     // A sector is comprised of multiple subsectors.  Adjust these values to
     // control how many subsectors appear horizontally and vertically.
-    let subSectorCols = 4; // number of subsectors across
-    let subSectorRows = 4; // number of subsectors down
-    // Total number of columns and rows in the entire sector
-    let cols = subCols * subSectorCols;
-    let rows = subRows * subSectorRows;
+    const baseSubSectorCols = 8; // number of subsectors across in the full map
+    const baseSubSectorRows = 8; // number of subsectors down in the full map
+    // Displayed subsector counts (may be smaller than the base)
+    let displaySubSectorCols = 4;
+    let displaySubSectorRows = 4;
+    // Total number of columns and rows in the entire base map
+    const baseCols = subCols * baseSubSectorCols;
+    const baseRows = subRows * baseSubSectorRows;
+    // Total number of columns and rows currently displayed
+    let displayCols = subCols * displaySubSectorCols;
+    let displayRows = subRows * displaySubSectorRows;
+    // Offset (in subsectors) into the base map for display
+    let displayOffsetSubsectorX = 0;
+    let displayOffsetSubsectorY = 0;
     // Maximum canvas dimensions used to scale the grid.  The drawing code
     // computes an appropriate hex side length so that the entire sector
     // fits within these bounds.  Feel free to increase these values for
@@ -131,8 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const diffusionRate = 0.2;   // diffusion rate for trail (controls how quickly trail spreads)
     const decayRate = 0.96;      // decay factor for trail each iteration (multiplier < 1)
 
-    // Internal state: array of length cols*rows storing accumulated trail per hex
-    let cellIntensities = new Array(cols * rows).fill(0);
+    // Internal state: array of length baseCols*baseRows storing accumulated trail per hex
+    let cellIntensities = new Array(baseCols * baseRows).fill(0);
 
     // State for UI features
     // Current zoom factor; used to scale the canvas via CSS transform
@@ -173,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map mode: 'single' for a 4x4 sector; 'vastness' for an expanded sector
     let mapMode = 'single';
 
-    function applyMapMode(newMode, { regenerate = false } = {}) {
+    function applyMapMode(newMode, { redraw = false } = {}) {
         if (!newMode || newMode === mapMode) {
             return;
         }
@@ -182,23 +191,23 @@ document.addEventListener('DOMContentLoaded', () => {
             radio.checked = (radio.value === mapMode);
         });
         if (mapMode === 'single') {
-            subSectorCols = 4;
-            subSectorRows = 4;
+            displaySubSectorCols = 4;
+            displaySubSectorRows = 4;
         } else {
             // Expand to a larger sector: 8×8 subsectors for vastness
-            subSectorCols = 8;
-            subSectorRows = 8;
+            displaySubSectorCols = baseSubSectorCols;
+            displaySubSectorRows = baseSubSectorRows;
         }
         // Recalculate totals
-        cols = subCols * subSectorCols;
-        rows = subRows * subSectorRows;
+        displayCols = subCols * displaySubSectorCols;
+        displayRows = subRows * displaySubSectorRows;
+        displayOffsetSubsectorX = 0;
+        displayOffsetSubsectorY = 0;
         // Reset selected subsector and hide download button
         selectedSubsector = null;
         downloadSubsectorBtn.style.display = 'none';
-        // Resize the intensities array
-        cellIntensities = new Array(cols * rows).fill(0);
-        if (regenerate) {
-            generateMap();
+        if (redraw) {
+            drawHexGrid();
         }
     }
 
@@ -424,24 +433,30 @@ document.addEventListener('DOMContentLoaded', () => {
      * from a single sector to a multi-sector layout.
      */
     function computeSubsectorRanges() {
-        const ranges = new Array(subSectorCols * subSectorRows);
-        for (let sy = 0; sy < subSectorRows; sy++) {
-            for (let sx = 0; sx < subSectorCols; sx++) {
+        const ranges = new Array(baseSubSectorCols * baseSubSectorRows);
+        for (let sy = 0; sy < baseSubSectorRows; sy++) {
+            for (let sx = 0; sx < baseSubSectorCols; sx++) {
                 let minVal = Infinity;
                 let maxVal = -Infinity;
                 for (let r = 0; r < subRows; r++) {
                     for (let c = 0; c < subCols; c++) {
                         const globalRow = sy * subRows + r;
                         const globalCol = sx * subCols + c;
-                        const val = cellIntensities[globalRow * cols + globalCol];
+                        const val = cellIntensities[globalRow * baseCols + globalCol];
                         if (val < minVal) minVal = val;
                         if (val > maxVal) maxVal = val;
                     }
                 }
-                ranges[sy * subSectorCols + sx] = { minVal, maxVal };
+                ranges[sy * baseSubSectorCols + sx] = { minVal, maxVal };
             }
         }
         return ranges;
+    }
+
+    function globalIndexForDisplay(row, col) {
+        const globalRow = row + displayOffsetSubsectorY * subRows;
+        const globalCol = col + displayOffsetSubsectorX * subCols;
+        return globalRow * baseCols + globalCol;
     }
 
     /**
@@ -463,18 +478,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // are shifted downward by half of the vertical spacing.  We derive
         // a side length that allows the entire sector (including the half
         // offset at the bottom) to fit within the maximum canvas dimensions.
-        // The total width of the grid is (1.5 * cols + 0.5) × sideLen and
-        // the total height is (rows + 0.5) × height.  See derivation in
+        // The total width of the grid is (1.5 * displayCols + 0.5) × sideLen and
+        // the total height is (displayRows + 0.5) × height.  See derivation in
         // the report for details.
         const sqrt3 = Math.sqrt(3);
         // Candidate side length constrained by horizontal space.
-        // width = (1.5 * cols + 0.5) × sideLen
-        const sideLenW = maxCanvasWidth / (1.5 * cols + 0.5);
+        // width = (1.5 * displayCols + 0.5) × sideLen
+        const sideLenW = maxCanvasWidth / (1.5 * displayCols + 0.5);
         // Candidate side length constrained by vertical space.  With a
         // half‑row offset, the total height of the grid is
-        // (rows + 0.5) × height = (rows + 0.5) × √3 × sideLen.
-        // ⇒ sideLen = maxCanvasHeight / ((rows + 0.5) × √3).
-        const sideLenH = maxCanvasHeight / ((rows + 0.5) * sqrt3);
+        // (displayRows + 0.5) × height = (displayRows + 0.5) × √3 × sideLen.
+        // ⇒ sideLen = maxCanvasHeight / ((displayRows + 0.5) × √3).
+        const sideLenH = maxCanvasHeight / ((displayRows + 0.5) * sqrt3);
         const sideLen = Math.min(sideLenW, sideLenH);
         // Record current side length for click detection and export calculations
         currentSideLen = sideLen;
@@ -485,8 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const verticalSpacing = hexHeight; // distance between row centres
         // Compute canvas size.  The width stays the same as before.  The
         // height accounts for the half‑row offset on the last columns.
-        const canvasWidth = (1.5 * cols + 0.5) * sideLen;
-        const canvasHeight = (rows + 0.5) * hexHeight;
+        const canvasWidth = (1.5 * displayCols + 0.5) * sideLen;
+        const canvasHeight = (displayRows + 0.5) * hexHeight;
         // Hi‑DPI scaling with zoom: adjust the internal canvas resolution based
         // on both device pixel ratio and the current zoom factor.  By
         // allocating a larger backing store proportional to zoomFactor we
@@ -515,13 +530,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear canvas (in unscaled coordinate system)
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         // Loop through every cell to draw the hex, fill colour, labels
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const index = row * cols + col;
+        for (let row = 0; row < displayRows; row++) {
+            for (let col = 0; col < displayCols; col++) {
+                const index = globalIndexForDisplay(row, col);
                 const val = cellIntensities[index];
-                const sx = Math.floor(col / subCols);
-                const sy = Math.floor(row / subRows);
-                const { minVal, maxVal } = subsectorRanges[sy * subSectorCols + sx];
+                const globalRow = row + displayOffsetSubsectorY * subRows;
+                const globalCol = col + displayOffsetSubsectorX * subCols;
+                const sx = Math.floor(globalCol / subCols);
+                const sy = Math.floor(globalRow / subRows);
+                const { minVal, maxVal } = subsectorRanges[sy * baseSubSectorCols + sx];
                 // Normalise deposit to [0,1]
                 let norm = 0;
                 if (maxVal > minVal) {
@@ -710,10 +727,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.strokeStyle = boundaryColour;
         const boundaryWidth = showBoundaries ? 2 : 0;
         // loop again to draw boundary edges
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
+        for (let row = 0; row < displayRows; row++) {
+            for (let col = 0; col < displayCols; col++) {
                 // compute centre as before
-                const index = row * cols + col;
+                const index = globalIndexForDisplay(row, col);
                 const offsetRows = (col % 2) * 0.5;
                 const cx = col * horizSpacing + sideLen;
                 const cy = (row + offsetRows) * verticalSpacing + hexHeight / 2;
@@ -727,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 // vertical boundaries: highlight right edges for the last
                 // column in each subsector
-                if ((col + 1) % subCols === 0 && col !== cols - 1) {
+                if ((col + 1) % subCols === 0 && col !== displayCols - 1) {
                     // Right boundary: draw edges from vertex 0 to 1 (top-right)
                     // and from vertex 0 to 5 (bottom-right).
                     ctx.beginPath();
@@ -758,7 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 //   • if the column is even, draw a bottom‑right
                 //     diagonal (vertex 1→0) to connect downwards to
                 //     the following odd column.
-                const isBoundaryRow = (((row + 1) % subRows) === 0) && (row < rows - 1);
+                const isBoundaryRow = (((row + 1) % subRows) === 0) && (row < displayRows - 1);
                 if (isBoundaryRow) {
                     // Bottom horizontal: vertex 1 → vertex 2 (south‑east to south‑west)
                     ctx.beginPath();
@@ -840,15 +857,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset the RNG to the current seed to ensure deterministic results.
         setSeed(currentSeed);
         // Initialise the global cell intensities array for the entire sector
-        cellIntensities = new Array(cols * rows).fill(0);
+        cellIntensities = new Array(baseCols * baseRows).fill(0);
         // Reset the worlds array to ensure fresh world generation for each cell
-        worlds = new Array(cols * rows).fill(null);
+        worlds = new Array(baseCols * baseRows).fill(null);
         // For each subsector, run a separate simulation and accumulate its
         // results into the global grid.  This produces varied patterns across
         // the sector while still using the Physarum algorithm within each
         // subsector.
-        for (let sy = 0; sy < subSectorRows; sy++) {
-            for (let sx = 0; sx < subSectorCols; sx++) {
+        for (let sy = 0; sy < baseSubSectorRows; sy++) {
+            for (let sx = 0; sx < baseSubSectorCols; sx++) {
                 const simData = runSimulation(subCols, subRows);
                 const subIntensities = accumulateToCells(simData, subCols, subRows);
                 // Copy the subsector intensities into the correct location in
@@ -857,7 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (let c = 0; c < subCols; c++) {
                         const globalRow = sy * subRows + r;
                         const globalCol = sx * subCols + c;
-                        cellIntensities[globalRow * cols + globalCol] = subIntensities[r * subCols + c];
+                        cellIntensities[globalRow * baseCols + globalCol] = subIntensities[r * subCols + c];
                     }
                 }
             }
@@ -919,12 +936,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const verticalSpacing = sqrt3 * sideLen;
         // Compute approximate column based on x coordinate.
         const approxCol = Math.floor((px - sideLen) / horizSpacing);
-        if (approxCol < 0 || approxCol >= cols) return null;
+        if (approxCol < 0 || approxCol >= displayCols) return null;
         // Determine the offset for odd columns
         const offsetRows = (approxCol % 2) * 0.5;
         // Compute approximate row based on y coordinate.
         const approxRow = Math.floor((py - (offsetRows * verticalSpacing) - (sideLen * sqrt3 / 2)) / verticalSpacing);
-        if (approxRow < 0 || approxRow >= rows) return null;
+        if (approxRow < 0 || approxRow >= displayRows) return null;
         return { col: approxCol, row: approxRow };
     }
 
@@ -1171,7 +1188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const subH = (subRows + 0.5) * sqrt3local * currentSideLen;
         const sx = Math.floor(x / subW);
         const sy = Math.floor(y / subH);
-        if (sx >= 0 && sx < subSectorCols && sy >= 0 && sy < subSectorRows) {
+        if (sx >= 0 && sx < displaySubSectorCols && sy >= 0 && sy < displaySubSectorRows) {
             selectedSubsector = { sx, sy };
             downloadSubsectorBtn.style.display = 'inline-block';
         } else {
@@ -1234,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map mode radio: switch between single and vastness sectors
     mapModeRadios.forEach((radio) => {
         radio.addEventListener('change', (event) => {
-            applyMapMode(event.target.value, { regenerate: true });
+            applyMapMode(event.target.value, { redraw: true });
             // Update presence slider max based on bit depth (unchanged) but clamp threshold
             presenceSlider.max = bitDepthSlider.value;
             if (presenceThresholdVal > parseInt(bitDepthSlider.value, 10)) {
@@ -1259,14 +1276,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const exportMaxH = maxCanvasHeight * exportScale;
         // Compute side length for export using the same formulas as
         // drawHexGrid but with scaled max dimensions
-        const sideW = exportMaxW / (1.5 * cols + 0.5);
-        const sideH = exportMaxH / ((rows + 0.5) * sqrt3local);
+        const sideW = exportMaxW / (1.5 * displayCols + 0.5);
+        const sideH = exportMaxH / ((displayRows + 0.5) * sqrt3local);
         const sideLenExp = Math.min(sideW, sideH);
         const hexHeightExp = sqrt3local * sideLenExp;
         const horizSpacingExp = 1.5 * sideLenExp;
         const verticalSpacingExp = hexHeightExp;
-        const canvasW = (1.5 * cols + 0.5) * sideLenExp;
-        const canvasH = (rows + 0.5) * hexHeightExp;
+        const canvasW = (1.5 * displayCols + 0.5) * sideLenExp;
+        const canvasH = (displayRows + 0.5) * hexHeightExp;
         // Create offscreen canvas
         const off = document.createElement('canvas');
         off.width = canvasW;
@@ -1276,13 +1293,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const levels = parseInt(bitDepthSlider.value, 10);
         const subsectorRanges = computeSubsectorRanges();
         // Draw all hexes
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const index = row * cols + col;
+        for (let row = 0; row < displayRows; row++) {
+            for (let col = 0; col < displayCols; col++) {
+                const index = globalIndexForDisplay(row, col);
                 const val = cellIntensities[index];
-                const sx = Math.floor(col / subCols);
-                const sy = Math.floor(row / subRows);
-                const { minVal, maxVal } = subsectorRanges[sy * subSectorCols + sx];
+                const globalRow = row + displayOffsetSubsectorY * subRows;
+                const globalCol = col + displayOffsetSubsectorX * subCols;
+                const sx = Math.floor(globalCol / subCols);
+                const sy = Math.floor(globalRow / subRows);
+                const { minVal, maxVal } = subsectorRanges[sy * baseSubSectorCols + sx];
                 let norm = 0;
                 if (maxVal > minVal) {
                     norm = (val - minVal) / (maxVal - minVal);
@@ -1432,8 +1451,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (showBoundaries) {
             offCtx.strokeStyle = '#0088CC';
             offCtx.lineWidth = 2 * exportScale;
-            for (let row = 0; row < rows; row++) {
-                for (let col = 0; col < cols; col++) {
+            for (let row = 0; row < displayRows; row++) {
+                for (let col = 0; col < displayCols; col++) {
                     // Compute centre of this hex
                     const offsetRows = (col % 2) * 0.5;
                     const cxBound = col * horizSpacingExp + sideLenExp;
@@ -1447,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         verts.push({ x: vx, y: vy });
                     }
                     // Vertical boundary: right edges where col+1 divisible by subCols, excluding sector's last column
-                    if ((col + 1) % subCols === 0 && col !== cols - 1) {
+                    if ((col + 1) % subCols === 0 && col !== displayCols - 1) {
                         offCtx.beginPath();
                         offCtx.moveTo(verts[0].x, verts[0].y);
                         offCtx.lineTo(verts[1].x, verts[1].y);
@@ -1458,7 +1477,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         offCtx.stroke();
                     }
                     // Horizontal boundary: bottom edges on the last row of each subsector
-                    const isBoundaryRowExp = (((row + 1) % subRows) === 0) && (row < rows - 1);
+                    const isBoundaryRowExp = (((row + 1) % subRows) === 0) && (row < displayRows - 1);
                     if (isBoundaryRowExp) {
                         // Bottom horizontal (vertex 1→2)
                         offCtx.beginPath();
@@ -1499,6 +1518,8 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function exportSubsector(sx, sy) {
         const sqrt3local = Math.sqrt(3);
+        const globalSx = sx + displayOffsetSubsectorX;
+        const globalSy = sy + displayOffsetSubsectorY;
         // Determine base side length for a subsector; compute as though
         // drawing only an 8×10 grid within maxCanvasWidth/maxCanvasHeight.
         const subSideW = (maxCanvasWidth * exportScale) / (1.5 * subCols + 0.5);
@@ -1518,19 +1539,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const subInts = new Array(subCols * subRows).fill(0);
         for (let r = 0; r < subRows; r++) {
             for (let c = 0; c < subCols; c++) {
-                const globalRow = sy * subRows + r;
-                const globalCol = sx * subCols + c;
-                const globalIndex = globalRow * cols + globalCol;
+                const globalRow = globalSy * subRows + r;
+                const globalCol = globalSx * subCols + c;
+                const globalIndex = globalRow * baseCols + globalCol;
                 subInts[r * subCols + c] = cellIntensities[globalIndex];
             }
         }
-        // Compute min/max for sub intensities
-        let minVal = Infinity;
-        let maxVal = -Infinity;
-        for (const v of subInts) {
-            if (v < minVal) minVal = v;
-            if (v > maxVal) maxVal = v;
-        }
+        const subsectorRanges = computeSubsectorRanges();
+        const { minVal, maxVal } = subsectorRanges[globalSy * baseSubSectorCols + globalSx];
         const levels = parseInt(bitDepthSlider.value, 10);
         // Draw the local hexes
         for (let row = 0; row < subRows; row++) {
@@ -1598,9 +1614,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const worldPresentExp = (level + 1) >= presenceThresholdVal;
                 if (generateWholeWorlds && worldPresentExp) {
                     // Compute global index to look up world in worlds[]
-                    const globalRow = sy * subRows + row;
-                    const globalCol = sx * subCols + col;
-                    const globalIndex = globalRow * cols + globalCol;
+                    const globalRow = globalSy * subRows + row;
+                    const globalCol = globalSx * subCols + col;
+                    const globalIndex = globalRow * baseCols + globalCol;
                     if (!worlds[globalIndex]) {
                         worlds[globalIndex] = generateWorld();
                     }
