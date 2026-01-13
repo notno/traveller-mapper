@@ -1770,7 +1770,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const world = worlds[index];
                 const hex = `${String(col + 1).padStart(2, '0')}${String(row + 1).padStart(2, '0')}`;
                 const name = `World ${hex}`;
-                const uwp = worldToUWP(world);
+                const uwp = worldToUWP(world).replace(/\*$/, '');
                 const pbg = `${world.population}${0}${world.gasGiant ? 1 : 0}`;
                 rows.push([
                     hex,
