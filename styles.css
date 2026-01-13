@@ -46,6 +46,47 @@ h2 {
     margin-bottom: 1.25rem;
 }
 
+.panel summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.panel summary::-webkit-details-marker {
+    display: none;
+}
+
+.panel summary::after {
+    content: "▾";
+    font-size: 1rem;
+    color: #6b7280;
+    transition: transform 0.2s ease;
+}
+
+.panel:not([open]) summary::after {
+    transform: rotate(-90deg);
+}
+
+details.panel {
+    padding: 0;
+}
+
+details.panel > summary {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+details.panel > summary h2 {
+    margin: 0;
+}
+
+details.panel .panel-body {
+    padding: 1.5rem;
+}
+
 .panel-output {
     white-space: pre-wrap;
     border: 1px solid #e5e7eb;
@@ -159,6 +200,67 @@ h2 {
 
 #controls button:active {
     transform: translateY(0);
+}
+
+#t5Export .control-description {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+#t5Export .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+#t5Export .control-group__label {
+    font-weight: 600;
+    color: #374151;
+}
+
+#t5Export .control-option {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+#t5Export button {
+    padding: 0.55rem 1rem;
+    font-size: 0.95rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    background: linear-gradient(120deg, #2563eb, #4f46e5);
+    color: white;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 0.75rem;
+}
+
+#t5Export button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
+}
+
+#t5Export button:active {
+    transform: translateY(0);
+}
+
+#t5Export .t5-output {
+    width: 100%;
+    min-height: 160px;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    padding: 0.6rem 0.75rem;
+    font-family: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+    font-size: 0.85rem;
+    background: #ffffff;
+    color: #111827;
+    resize: vertical;
 }
 
 .button-row {

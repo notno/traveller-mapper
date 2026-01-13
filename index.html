@@ -20,50 +20,52 @@
         <p>Currently based on rules from <a href="https://www.drivethrurpg.com/en/product/415159/cepheus-deluxe-enhanced-edition">Cepheus Deluxe.</a></p>
     </header>
     <!-- Single World Generator section -->
-    <section id="worldGenSection" class="panel">
-        <h2>Single World Generator</h2>
-        <p>Generates an 8-digit code (UWP) detail:</p>
-        <ol>
-            <li>Starport</li>
-            <li>Size</li>
-            <li>Atmosphere</li>
-            <li>Hydrology</li>
-            <li>Population</li>
-            <li>Governement</li>
-            <li>Law</li>
-            <li>TechLevel</li>
-        </ol>
-        <p>An asterisk* indicates the presence of a gas giant in the system.</p>
-        <p>Trade codes:</p>
-        <ul>
-            <li>Agricultural: <b>Ag</b></li>
-            <li>Asteroid: <b>As</b></li>
-            <li>Barren: <b>Ba</b></li>
-            <li>Non-water fluid oceans: <b>Fl</b></li>
-            <li>Garden: <b>Ga</b></li>
-            <li>High population: <b>Hi</b></li>
-            <li>High technology: <b>Ht</b></li>
-            <li>Ice-capped: <b>Ic</b> </li>
-            <li>Industrial: <b>In</b></li>
-            <li>Low population: <b>Lo</b></li>
-            <li>Low technology: <b>Lt</b></li>
-            <li>Non-agricultural: <b>Na</b></li>
-            <li>Poor: <b>Po</b></li>
-            <li>Rich: <b>Ri</b></li>
-            <li>Water world: <b>Wa</b></li>
-            <li>Vacuum: <b>Va</b></li>
-        </ul>
-        <p>Base codes:</p>
-        <ul>
-           <li>Naval: N</li>
-           <li>Pirate: P</li>
-            <li>Research: R</li>
-            <li>Scout: S</li>
-        </ul>
-        <button id="generateWorldBtn">Generate World</button>
-        <!-- Output area for single world details.  Use pre-wrap so line breaks are preserved and give it a border for readability -->
-        <pre id="worldOutput" class="panel-output"></pre>
-    </section>
+    <details id="worldGenSection" class="panel">
+        <summary><h2>Single World Generator</h2></summary>
+        <div class="panel-body">
+            <p>Generates an 8-digit code (UWP) detail:</p>
+            <ol>
+                <li>Starport</li>
+                <li>Size</li>
+                <li>Atmosphere</li>
+                <li>Hydrology</li>
+                <li>Population</li>
+                <li>Governement</li>
+                <li>Law</li>
+                <li>TechLevel</li>
+            </ol>
+            <p>An asterisk* indicates the presence of a gas giant in the system.</p>
+            <p>Trade codes:</p>
+            <ul>
+                <li>Agricultural: <b>Ag</b></li>
+                <li>Asteroid: <b>As</b></li>
+                <li>Barren: <b>Ba</b></li>
+                <li>Non-water fluid oceans: <b>Fl</b></li>
+                <li>Garden: <b>Ga</b></li>
+                <li>High population: <b>Hi</b></li>
+                <li>High technology: <b>Ht</b></li>
+                <li>Ice-capped: <b>Ic</b> </li>
+                <li>Industrial: <b>In</b></li>
+                <li>Low population: <b>Lo</b></li>
+                <li>Low technology: <b>Lt</b></li>
+                <li>Non-agricultural: <b>Na</b></li>
+                <li>Poor: <b>Po</b></li>
+                <li>Rich: <b>Ri</b></li>
+                <li>Water world: <b>Wa</b></li>
+                <li>Vacuum: <b>Va</b></li>
+            </ul>
+            <p>Base codes:</p>
+            <ul>
+               <li>Naval: N</li>
+               <li>Pirate: P</li>
+                <li>Research: R</li>
+                <li>Scout: S</li>
+            </ul>
+            <button id="generateWorldBtn">Generate World</button>
+            <!-- Output area for single world details.  Use pre-wrap so line breaks are preserved and give it a border for readability -->
+            <pre id="worldOutput" class="panel-output"></pre>
+        </div>
+    </details>
     <header>
         <p>
             Below is a tool that generates a star‑density heat map for one to four sectors
@@ -98,35 +100,6 @@
                         <span id="seedDisplay"></span>
                     </div>
                 </div>
-            </div>
-            <div class="control-panel">
-                <h3>T5 Export: <b>EXPERIMENTAL</b></h3>
-                <p class="control-description">
-                    Export a tab-delimited T5 sector file based on generated hex data, which you can use on the wonderful <a href="https://travellermap.com/make/poster">Traveller Map Poster Maker</a>. 
-                </p>
-                <p>
-                    This exporter is a very rough, experimental feature. When you import it elsewhere, it <em>will</em> fail silently, leaving empty hexes where broken planets lie.
-                </p>
-                <!-- <div class="control-group">
-                    <label class="control-option" for="includeXmlMetadata">
-                        <input type="checkbox" id="includeXmlMetadata">
-                        Include XML metadata
-                    </label>
-                </div> -->
-                <div class="control-group">
-                    <span class="control-group__label">Format</span>
-                    <label class="control-option">
-                        <input type="radio" name="t5Format" value="tab" checked>
-                        T5 tab-delimited
-                    </label>
-                    <!-- <label class="control-option">
-                        <input type="radio" name="t5Format" value="column">
-                        T5 column-delimited
-                    </label> -->
-                </div>
-                <button id="exportT5" type="button">Generate T5 (tab-delimited)</button>
-                <label class="control-group__label" for="t5Output">T5 Output</label>
-                <textarea id="t5Output" class="t5-output" rows="8" readonly></textarea>
             </div>
             <div class="button-row">
                 <button id="randomizeSeed">Randomize seed</button>
@@ -241,6 +214,35 @@
         <!-- Tooltip for world details; positioned absolutely and hidden by default -->
         <div id="tooltip" class="tooltip"></div>
     </div>
+    <section id="t5Export" class="panel">
+        <h2>T5 Export: <b>EXPERIMENTAL</b></h2>
+        <p class="control-description">
+            Export a tab-delimited T5 sector file based on generated hex data, which you can use on the wonderful <a href="https://travellermap.com/make/poster">Traveller Map Poster Maker</a>.
+        </p>
+        <p>
+            This exporter is a very rough, experimental feature. When you import it elsewhere, it <em>will</em> fail silently, leaving empty hexes where broken planets lie.
+        </p>
+        <!-- <div class="control-group">
+            <label class="control-option" for="includeXmlMetadata">
+                <input type="checkbox" id="includeXmlMetadata">
+                Include XML metadata
+            </label>
+        </div> -->
+        <div class="control-group">
+            <span class="control-group__label">Format</span>
+            <label class="control-option">
+                <input type="radio" name="t5Format" value="tab" checked>
+                T5 tab-delimited
+            </label>
+            <!-- <label class="control-option">
+                <input type="radio" name="t5Format" value="column">
+                T5 column-delimited
+            </label> -->
+        </div>
+        <button id="exportT5" type="button">Generate T5 (tab-delimited)</button>
+        <label class="control-group__label" for="t5Output">T5 Output</label>
+        <textarea id="t5Output" class="t5-output" rows="8" readonly></textarea>
+    </section>
     <footer>
         <p>
             The underlying algorithm is inspired by Jeff Jones’ Physarum model
