@@ -56,11 +56,31 @@ h2 {
     min-height: 2.5rem;
 }
 
-#controls {
+#controls .controls-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     align-items: start;
     gap: 1rem 1.5rem;
+}
+
+#controls .control-panel {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+#controls .control-panel h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #111827;
+}
+
+#controls .control-panel--wide {
+    grid-column: 1 / -1;
 }
 
 #controls label {
