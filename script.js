@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportT5Btn = document.getElementById('exportT5');
     const includeXmlMetadataCheckbox = document.getElementById('includeXmlMetadata');
     const t5FormatRadios = document.querySelectorAll('input[name="t5Format"]');
+    const t5Output = document.getElementById('t5Output');
     // Randomize seed button
     const randomizeBtn = document.getElementById('randomizeSeed');
     // Zoom controls
@@ -1166,7 +1167,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const formatLabel = getSelectedT5Format() === 'column' ? 'column-delimited' : 'tab-delimited';
-        exportT5Btn.textContent = `Download T5 (${formatLabel})`;
+        exportT5Btn.textContent = `Generate T5 (${formatLabel})`;
     }
 
     t5FormatRadios.forEach((radio) => {
@@ -1771,21 +1772,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hex = `${String(col + 1).padStart(2, '0')}${String(row + 1).padStart(2, '0')}`;
                 const name = `World ${hex}`;
                 const uwp = worldToUWP(world);
-                rows.push([hex, name, uwp, seedString]);
+                rows.push([
+                    hex,
+                    name,
+                    uwp,
+                    seedString,
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]);
             }
         }
         return rows;
     }
 
     function formatT5Rows(rows, format) {
-        const header = ['Hex', 'Name', 'UWP', 'Remarks'];
+        const header = ['Hex', 'Name', 'UWP', 'Remarks', '{Ix}', '(Ex)', '[Cx]', 'N', 'B', 'Z', 'PBG', 'W', 'A', 'Stellar'];
         if (format === 'column') {
-            const widths = [4, 20, 9, 32];
+            const widths = [4, 20, 9, 27, 6, 7, 6, 4, 2, 1, 3, 2, 4, 14];
             const formatRow = (columns) => columns
                 .map((value, index) => String(value).padEnd(widths[index] || 0))
                 .join(' ')
                 .trimEnd();
-            return [formatRow(header), ...rows.map(formatRow)].join('\r\n');
+            const separator = widths
+                .map((width) => '-'.repeat(Math.max(1, width)))
+                .join(' ')
+                .trimEnd();
+            return [formatRow(header), separator, ...rows.map(formatRow)].join('\r\n');
         }
         return [header.join('\t'), ...rows.map((row) => row.join('\t'))].join('\r\n');
     }
@@ -1798,10 +1818,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const seedString = getSeedStringForExport();
             content += `\r\n\r\n<Metadata>\r\n  <Seed>${seedString}</Seed>\r\n</Metadata>`;
         }
-        const blob = new Blob([content], { type: 'text/plain' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = format === 'column' ? 't5_export.txt' : 't5_export.tsv';
-        link.click();
+        if (t5Output) {
+            t5Output.value = content;
+            t5Output.focus();
+            t5Output.select();
+        }
     }
 });
