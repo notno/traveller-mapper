@@ -70,18 +70,10 @@ document.addEventListener('DOMContentLoaded', () => {
         boundaryCheckbox.addEventListener('change', () => {
             showBoundaries = boundaryCheckbox.checked;
             drawHexGrid();
+            updateEncodedSeedString();
         });
     }
 
-    // Whole world generation checkbox
-    const wholeWorldCheckbox = document.getElementById('wholeWorlds');
-    if (wholeWorldCheckbox) {
-        wholeWorldCheckbox.addEventListener('change', () => {
-            generateWholeWorlds = wholeWorldCheckbox.checked;
-            // Redraw to display or hide UWP codes
-            drawHexGrid();
-        });
-    }
 
     // Single world generator controls
     const generateWorldBtn = document.getElementById('generateWorldBtn');
@@ -157,6 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let simulationScale = 1.0;
     // Display mode: 'density' shows world presence; 'dm' shows world occurrence DM values
     let displayMode = 'density';
+    // Whole world generation is derived from display mode.
+    generateWholeWorlds = displayMode === 'density';
     // Saturate factor: controls brightness bias.  >1 brightens, <1 darkens.
     let saturateFactor = 1.0;
 
@@ -179,21 +173,54 @@ document.addEventListener('DOMContentLoaded', () => {
     // Map mode: 'single' for a 4x4 sector; 'vastness' for an expanded sector
     let mapMode = 'single';
 
+    function applyMapMode(newMode, { regenerate = false } = {}) {
+        if (!newMode || newMode === mapMode) {
+            return;
+        }
+        mapMode = newMode;
+        mapModeRadios.forEach((radio) => {
+            radio.checked = (radio.value === mapMode);
+        });
+        if (mapMode === 'single') {
+            subSectorCols = 4;
+            subSectorRows = 4;
+        } else {
+            // Expand to a larger sector: 8×8 subsectors for vastness
+            subSectorCols = 8;
+            subSectorRows = 8;
+        }
+        // Recalculate totals
+        cols = subCols * subSectorCols;
+        rows = subRows * subSectorRows;
+        // Reset selected subsector and hide download button
+        selectedSubsector = null;
+        downloadSubsectorBtn.style.display = 'none';
+        // Resize the intensities array
+        cellIntensities = new Array(cols * rows).fill(0);
+        if (regenerate) {
+            generateMap();
+        }
+    }
+
     /**
      * Update the encoded seed string displayed in the seed input and
      * seed display.  Uses the current bit depth, simulation scale,
-     * saturate factor, display mode and numeric seed.  Does not change
-     * the numeric seed.  Call this whenever UI controls change so the
-     * prefix reflects the latest parameters.
+     * density, density threshold, generation mode, map mode, overlays
+     * and numeric seed.  Does not change the numeric seed.  Call this
+     * whenever UI controls change so the prefix reflects the latest
+     * parameters.
      */
     function updateEncodedSeedString() {
         const levels = bitDepthSlider.value;
         const scaleVal = parseFloat(simScaleSlider.value).toFixed(1);
-        const satVal = parseFloat(saturateSlider.value).toFixed(1);
-        const modeCode = (displayMode === 'dm') ? 'd' : 'l';
+        const densityVal = parseFloat(saturateSlider.value).toFixed(1);
+        const thresholdVal = parseInt(presenceSlider.value, 10);
+        const modeCode = (displayMode === 'dm') ? 'o' : 'g';
+        const mapCode = (mapMode === 'vastness') ? 'v' : 's';
+        const boundaryCode = showBoundaries ? 'b' : 'n';
         // Encode printable mode as 'p' for printable and 'n' for normal
         const printableCode = printableMode ? 'p' : 'n';
-        const encoded = `${levels}-${scaleVal}-${satVal}-${modeCode}-${printableCode}-${currentSeed}`;
+        const encoded = `${levels}-${scaleVal}-${densityVal}-${thresholdVal}-${modeCode}-${mapCode}-${boundaryCode}-${printableCode}-${currentSeed}`;
         seedInput.value = encoded;
         seedDisplay.textContent = `Seed ${encoded}`;
     }
@@ -894,13 +921,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // parameters is provided in the seedInput field, parse the prefix to
     // restore those settings.  Otherwise generate a new random seed.  After
     // generation, update the seed input with an encoded string that
-    // incorporates the current level, scale, saturate and display mode.
+    // incorporates the current content and display parameters.
     generateBtn.addEventListener('click', () => {
         // Read the seed string and trim whitespace
         const seedStr = seedInput.value.trim();
         let numericSeed;
         // Helper to synchronise UI controls and internal variables
-        function updateUIFromParams(levels, scale, saturate, modeCode, printableCode) {
+        function updateUIFromParams(levels, scale, saturate, threshold, modeCode, mapCode, boundaryCode, printableCode) {
             // Update bit depth slider and display
             const lvl = parseInt(levels, 10);
             if (!isNaN(lvl)) {
@@ -927,15 +954,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 saturateValue.textContent = sat.toFixed(1);
                 saturateFactor = sat;
             }
+            // Update presence threshold
+            const thresholdVal = parseInt(threshold, 10);
+            if (!isNaN(thresholdVal)) {
+                presenceThresholdVal = thresholdVal;
+                presenceSlider.value = thresholdVal;
+                presenceValue.textContent = thresholdVal.toString();
+            }
             // Update display mode and radio buttons
-            if (modeCode === 'd') {
+            if (modeCode === 'o' || modeCode === 'd') {
                 displayMode = 'dm';
             } else {
                 displayMode = 'density';
             }
+            generateWholeWorlds = displayMode === 'density';
             modeRadioButtons.forEach((rb) => {
                 rb.checked = (rb.value === displayMode);
             });
+
+            // Update map mode if provided
+            if (mapCode !== undefined) {
+                applyMapMode((mapCode === 'v') ? 'vastness' : 'single');
+            }
+
+            // Update boundary overlay if provided
+            if (boundaryCode !== undefined) {
+                showBoundaries = (boundaryCode === 'b');
+                if (boundaryCheckbox) {
+                    boundaryCheckbox.checked = showBoundaries;
+                }
+            }
 
             // Update printable mode if provided
             if (printableCode !== undefined) {
@@ -946,10 +994,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seedStr !== '') {
             const parts = seedStr.split('-');
             // If the seed string has at least 5 parts, assume it encodes
-            // params as levels-scale-saturate-mode-numericSeed.  Any
+            // params as levels-scale-density-mode-numericSeed.  Any
             // additional hyphens in the numeric seed are joined back.
-            if (parts.length >= 6) {
-                // New format: levels-scale-saturate-mode-printable-numericSeed
+            if (parts.length >= 9) {
+                // New format: levels-scale-density-threshold-mode-map-boundary-printable-numericSeed
+                const levelsPart = parts[0];
+                const scalePart = parts[1];
+                const densityPart = parts[2];
+                const thresholdPart = parts[3];
+                const modePart = parts[4];
+                const mapPart = parts[5];
+                const boundaryPart = parts[6];
+                const printablePart = parts[7];
+                const seedPart = parts.slice(8).join('-');
+                const parsedSeed = parseInt(seedPart, 10);
+                numericSeed = isNaN(parsedSeed) ? undefined : (parsedSeed >>> 0);
+                // Update UI controls from encoded parameters
+                updateUIFromParams(
+                    levelsPart,
+                    scalePart,
+                    densityPart,
+                    thresholdPart,
+                    modePart,
+                    mapPart,
+                    boundaryPart,
+                    printablePart
+                );
+            } else if (parts.length >= 6) {
+                // Previous format: levels-scale-saturate-mode-printable-numericSeed
                 const levelsPart = parts[0];
                 const scalePart = parts[1];
                 const saturatePart = parts[2];
@@ -959,7 +1031,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const parsedSeed = parseInt(seedPart, 10);
                 numericSeed = isNaN(parsedSeed) ? undefined : (parsedSeed >>> 0);
                 // Update UI controls from encoded parameters
-                updateUIFromParams(levelsPart, scalePart, saturatePart, modePart, printablePart);
+                updateUIFromParams(levelsPart, scalePart, saturatePart, undefined, modePart, undefined, undefined, printablePart);
             } else if (parts.length >= 5) {
                 // Older format: levels-scale-saturate-mode-numericSeed
                 const levelsPart = parts[0];
@@ -969,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const seedPart = parts.slice(4).join('-');
                 const parsedSeed = parseInt(seedPart, 10);
                 numericSeed = isNaN(parsedSeed) ? undefined : (parsedSeed >>> 0);
-                updateUIFromParams(levelsPart, scalePart, saturatePart, modePart);
+                updateUIFromParams(levelsPart, scalePart, saturatePart, undefined, modePart);
             } else {
                 // Only a numeric seed provided
                 const parsed = parseInt(seedStr, 10);
@@ -1117,6 +1189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modeRadioButtons.forEach((radio) => {
         radio.addEventListener('change', (event) => {
             displayMode = event.target.value;
+            generateWholeWorlds = displayMode === 'density';
             // Redraw grid with new labels (no need to regenerate simulation)
             drawHexGrid();
             updateEncodedSeedString();
@@ -1128,30 +1201,13 @@ document.addEventListener('DOMContentLoaded', () => {
         presenceThresholdVal = parseInt(presenceSlider.value, 10);
         presenceValue.textContent = presenceSlider.value;
         drawHexGrid();
+        updateEncodedSeedString();
     });
 
     // Map mode radio: switch between single and vastness sectors
     mapModeRadios.forEach((radio) => {
         radio.addEventListener('change', (event) => {
-            mapMode = event.target.value;
-            if (mapMode === 'single') {
-                subSectorCols = 4;
-                subSectorRows = 4;
-            } else {
-                // Expand to a larger sector: 8×6 subsectors for vastness
-                subSectorCols = 8;
-                subSectorRows = 8;
-            }
-            // Recalculate totals
-            cols = subCols * subSectorCols;
-            rows = subRows * subSectorRows;
-            // Reset selected subsector and hide download button
-            selectedSubsector = null;
-            downloadSubsectorBtn.style.display = 'none';
-            // Resize the intensities array
-            cellIntensities = new Array(cols * rows).fill(0);
-            // Regenerate map with new dimensions
-            generateMap();
+            applyMapMode(event.target.value, { regenerate: true });
             // Update presence slider max based on bit depth (unchanged) but clamp threshold
             presenceSlider.max = bitDepthSlider.value;
             if (presenceThresholdVal > parseInt(bitDepthSlider.value, 10)) {
@@ -1159,6 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 presenceSlider.value = presenceThresholdVal;
                 presenceValue.textContent = presenceThresholdVal.toString();
             }
+            updateEncodedSeedString();
         });
     });
 
