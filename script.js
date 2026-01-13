@@ -419,6 +419,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Compute min/max intensity ranges for each subsector. Normalising
+     * per-subsector keeps world visibility consistent when the map grows
+     * from a single sector to a multi-sector layout.
+     */
+    function computeSubsectorRanges() {
+        const ranges = new Array(subSectorCols * subSectorRows);
+        for (let sy = 0; sy < subSectorRows; sy++) {
+            for (let sx = 0; sx < subSectorCols; sx++) {
+                let minVal = Infinity;
+                let maxVal = -Infinity;
+                for (let r = 0; r < subRows; r++) {
+                    for (let c = 0; c < subCols; c++) {
+                        const globalRow = sy * subRows + r;
+                        const globalCol = sx * subCols + c;
+                        const val = cellIntensities[globalRow * cols + globalCol];
+                        if (val < minVal) minVal = val;
+                        if (val > maxVal) maxVal = val;
+                    }
+                }
+                ranges[sy * subSectorCols + sx] = { minVal, maxVal };
+            }
+        }
+        return ranges;
+    }
+
+    /**
      * Draw the hex grid using the current cell intensities and bit depth.
      */
     function drawHexGrid() {
@@ -485,9 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // corresponds to internalScale pixels.  The transform resets
         // translation to the origin (0,0).
         ctx.setTransform(internalScale, 0, 0, internalScale, 0, 0);
-        // Find min and max of intensities
-        const minVal = Math.min(...cellIntensities);
-        const maxVal = Math.max(...cellIntensities);
+        const subsectorRanges = computeSubsectorRanges();
         // Clear canvas (in unscaled coordinate system)
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         // Loop through every cell to draw the hex, fill colour, labels
@@ -495,6 +519,9 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let col = 0; col < cols; col++) {
                 const index = row * cols + col;
                 const val = cellIntensities[index];
+                const sx = Math.floor(col / subCols);
+                const sy = Math.floor(row / subRows);
+                const { minVal, maxVal } = subsectorRanges[sy * subSectorCols + sx];
                 // Normalise deposit to [0,1]
                 let norm = 0;
                 if (maxVal > minVal) {
@@ -1245,15 +1272,17 @@ document.addEventListener('DOMContentLoaded', () => {
         off.width = canvasW;
         off.height = canvasH;
         const offCtx = off.getContext('2d');
-        // Determine levels and compute min/max intensities
+        // Determine levels and compute per-subsector min/max intensities
         const levels = parseInt(bitDepthSlider.value, 10);
-        const minVal = Math.min(...cellIntensities);
-        const maxVal = Math.max(...cellIntensities);
+        const subsectorRanges = computeSubsectorRanges();
         // Draw all hexes
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
                 const index = row * cols + col;
                 const val = cellIntensities[index];
+                const sx = Math.floor(col / subCols);
+                const sy = Math.floor(row / subRows);
+                const { minVal, maxVal } = subsectorRanges[sy * subSectorCols + sx];
                 let norm = 0;
                 if (maxVal > minVal) {
                     norm = (val - minVal) / (maxVal - minVal);
