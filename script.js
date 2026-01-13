@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateBtn = document.getElementById('generate');
     const downloadBtn = document.getElementById('download');
     const downloadSubsectorBtn = document.getElementById('downloadSubsector');
+    const exportT5Btn = document.getElementById('exportT5');
+    const includeXmlMetadataCheckbox = document.getElementById('includeXmlMetadata');
+    const t5FormatRadios = document.querySelectorAll('input[name="t5Format"]');
     // Randomize seed button
     const randomizeBtn = document.getElementById('randomizeSeed');
     // Zoom controls
@@ -1148,6 +1151,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function getSelectedT5Format() {
+        let selectedFormat = 'tab';
+        t5FormatRadios.forEach((radio) => {
+            if (radio.checked) {
+                selectedFormat = radio.value;
+            }
+        });
+        return selectedFormat;
+    }
+
+    function updateT5ExportLabel() {
+        if (!exportT5Btn) {
+            return;
+        }
+        const formatLabel = getSelectedT5Format() === 'column' ? 'column-delimited' : 'tab-delimited';
+        exportT5Btn.textContent = `Download T5 (${formatLabel})`;
+    }
+
+    t5FormatRadios.forEach((radio) => {
+        radio.addEventListener('change', updateT5ExportLabel);
+    });
+
+    if (exportT5Btn) {
+        exportT5Btn.addEventListener('click', () => {
+            exportT5Data();
+        });
+    }
+
     // Initial render
     bitDepthValue.textContent = bitDepthSlider.value;
     presenceValue.textContent = presenceSlider.value;
@@ -1161,6 +1192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Build the initial encoded seed string reflecting the current
     // parameters and numeric seed, and update the seed input/display.
     updateEncodedSeedString();
+    updateT5ExportLabel();
 
     // Zoom control: instead of using a CSS transform (which causes aliasing
     // artifacts when magnifying), adjust the canvas's internal resolution and
@@ -1687,6 +1719,89 @@ document.addEventListener('DOMContentLoaded', () => {
         const link = document.createElement('a');
         link.href = dataURL;
         link.download = `subsector_${sx + 1}${sy + 1}.png`;
+        link.click();
+    }
+
+    function getSeedStringForExport() {
+        updateEncodedSeedString();
+        const seedText = seedInput.value.trim();
+        if (seedText) {
+            return seedText;
+        }
+        return seedDisplay.textContent.replace(/^Seed\s+/i, '').trim();
+    }
+
+    function getCellLevel(index, globalRow, globalCol, levels, subsectorRanges) {
+        const val = cellIntensities[index];
+        const sx = Math.floor(globalCol / subCols);
+        const sy = Math.floor(globalRow / subRows);
+        const { minVal, maxVal } = subsectorRanges[sy * baseSubSectorCols + sx];
+        let norm = 0;
+        if (maxVal > minVal) {
+            norm = (val - minVal) / (maxVal - minVal);
+        }
+        if (saturateFactor !== 1) {
+            norm = Math.min(1, Math.max(0, Math.pow(norm, 1 / saturateFactor)));
+        }
+        let level = Math.floor(norm * (levels - 1));
+        if (level < 0) level = 0;
+        if (level >= levels) level = levels - 1;
+        return level;
+    }
+
+    function buildT5Rows() {
+        const levels = parseInt(bitDepthSlider.value, 10);
+        const subsectorRanges = computeSubsectorRanges();
+        const seedString = getSeedStringForExport();
+        const rows = [];
+        for (let row = 0; row < displayRows; row++) {
+            for (let col = 0; col < displayCols; col++) {
+                const index = globalIndexForDisplay(row, col);
+                const globalRow = row + displayOffsetSubsectorY * subRows;
+                const globalCol = col + displayOffsetSubsectorX * subCols;
+                const level = getCellLevel(index, globalRow, globalCol, levels, subsectorRanges);
+                const worldPresent = (level + 1) >= presenceThresholdVal;
+                if (!worldPresent) {
+                    continue;
+                }
+                if (!worlds[index]) {
+                    worlds[index] = generateWorld();
+                }
+                const world = worlds[index];
+                const hex = `${String(col + 1).padStart(2, '0')}${String(row + 1).padStart(2, '0')}`;
+                const name = `World ${hex}`;
+                const uwp = worldToUWP(world);
+                rows.push([hex, name, uwp, seedString]);
+            }
+        }
+        return rows;
+    }
+
+    function formatT5Rows(rows, format) {
+        const header = ['Hex', 'Name', 'UWP', 'Remarks'];
+        if (format === 'column') {
+            const widths = [4, 20, 9, 32];
+            const formatRow = (columns) => columns
+                .map((value, index) => String(value).padEnd(widths[index] || 0))
+                .join(' ')
+                .trimEnd();
+            return [formatRow(header), ...rows.map(formatRow)].join('\r\n');
+        }
+        return [header.join('\t'), ...rows.map((row) => row.join('\t'))].join('\r\n');
+    }
+
+    function exportT5Data() {
+        const rows = buildT5Rows();
+        const format = getSelectedT5Format();
+        let content = formatT5Rows(rows, format);
+        if (includeXmlMetadataCheckbox && includeXmlMetadataCheckbox.checked) {
+            const seedString = getSeedStringForExport();
+            content += `\r\n\r\n<Metadata>\r\n  <Seed>${seedString}</Seed>\r\n</Metadata>`;
+        }
+        const blob = new Blob([content], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = format === 'column' ? 't5_export.txt' : 't5_export.tsv';
         link.click();
     }
 });
