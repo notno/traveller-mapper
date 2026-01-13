@@ -1753,7 +1753,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildT5Rows() {
         const levels = parseInt(bitDepthSlider.value, 10);
         const subsectorRanges = computeSubsectorRanges();
-        const seedString = getSeedStringForExport();
         const rows = [];
         for (let row = 0; row < displayRows; row++) {
             for (let col = 0; col < displayCols; col++) {
@@ -1772,11 +1771,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hex = `${String(col + 1).padStart(2, '0')}${String(row + 1).padStart(2, '0')}`;
                 const name = `World ${hex}`;
                 const uwp = worldToUWP(world);
+                const pbg = `${world.population}${0}${world.gasGiant ? 1 : 0}`;
                 rows.push([
                     hex,
                     name,
                     uwp,
-                    seedString,
                     '',
                     '',
                     '',
@@ -1784,6 +1783,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '',
                     '',
                     '',
+                    pbg,
                     '',
                     '',
                     ''
