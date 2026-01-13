@@ -179,9 +179,35 @@ input[type="radio"] {
     /* Allow the canvas to expand beyond the viewport; scrollbars appear
        automatically when zooming in.  We do not constrain the width so
        that the canvas can grow when the zoom factor increases. */
+    position: relative;
     width: 100%;
     margin-bottom: 1.5rem;
     overflow: auto;
+}
+
+.canvas-overlays {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: grid;
+    grid-template-columns: minmax(220px, 300px) minmax(220px, 300px);
+    gap: 1rem;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.canvas-overlays .control-panel {
+    background: rgba(249, 250, 251, 0.9);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+
+@media (max-width: 900px) {
+    .canvas-overlays {
+        position: static;
+        grid-template-columns: 1fr;
+        margin-bottom: 1rem;
+    }
 }
 
 canvas {

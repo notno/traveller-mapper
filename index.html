@@ -84,6 +84,37 @@
     <section id="controls" class="panel">
         <h2>Sector Generator</h2>
         <div class="controls-grid">
+            <div class="control-panel control-panel--wide">
+                <h3>Seed</h3>
+                <div class="control-group">
+                    <!-- Seed input and display: shows the current random seed and allows
+                         the user to enter a seed to regenerate a previous map.  If the
+                         input is left blank when generating a new map, a new random
+                         seed will be chosen automatically.  The current seed is
+                         displayed in this box after generation. -->
+                    <div class="control-row">
+                        <label for="seedInput">Seed
+                            <input type="text" id="seedInput" size="10" placeholder="(auto)">
+                        </label>
+                        <span id="seedDisplay"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="button-row">
+                <button id="randomizeSeed">Randomize seed</button>
+                <button id="generate">Generate from seed</button>
+                <!-- Download the entire sector at high resolution -->
+                <button id="download">Download sector PNG</button>
+                <!-- Button to download a selected subsector; hidden until a subsector is clicked -->
+                <button id="downloadSubsector" class="is-hidden">Download subsector PNG</button>
+            </div>
+        </div>
+    </section>
+    <div id="canvasWrapper">
+        <canvas id="heatmapCanvas" width="800" height="800">
+            Your browser does not support the HTML5 canvas element.
+        </canvas>
+        <div class="canvas-overlays">
             <div class="control-panel">
                 <h3>Content</h3>
                 <div class="control-group">
@@ -178,36 +209,7 @@
                     </label>
                 </div>
             </div>
-            <div class="control-panel control-panel--wide">
-                <h3>Seed</h3>
-                <div class="control-group">
-                    <!-- Seed input and display: shows the current random seed and allows
-                         the user to enter a seed to regenerate a previous map.  If the
-                         input is left blank when generating a new map, a new random
-                         seed will be chosen automatically.  The current seed is
-                         displayed in this box after generation. -->
-                    <div class="control-row">
-                        <label for="seedInput">Seed
-                            <input type="text" id="seedInput" size="10" placeholder="(auto)">
-                        </label>
-                        <span id="seedDisplay"></span>
-                    </div>
-                </div>
-            </div>
-            <div class="button-row">
-                <button id="randomizeSeed">Randomize seed</button>
-                <button id="generate">Generate from seed</button>
-                <!-- Download the entire sector at high resolution -->
-                <button id="download">Download sector PNG</button>
-                <!-- Button to download a selected subsector; hidden until a subsector is clicked -->
-                <button id="downloadSubsector" class="is-hidden">Download subsector PNG</button>
-            </div>
         </div>
-    </section>
-    <div id="canvasWrapper">
-        <canvas id="heatmapCanvas" width="800" height="800">
-            Your browser does not support the HTML5 canvas element.
-        </canvas>
         <!-- Tooltip for world details; positioned absolutely and hidden by default -->
         <div id="tooltip" class="tooltip"></div>
     </div>
