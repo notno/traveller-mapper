@@ -79,6 +79,13 @@ h2 {
     color: #111827;
 }
 
+#controls .control-description {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
 #controls .control-panel--wide {
     grid-column: 1 / -1;
 }
