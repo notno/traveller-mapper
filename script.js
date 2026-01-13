@@ -1750,6 +1750,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return level;
     }
 
+    function formatUwpForExport(world) {
+        const baseUwp = worldToUWP(world).replace(/\*$/, '');
+        if (baseUwp.length < 8) {
+            return baseUwp;
+        }
+        return `${baseUwp.slice(0, 7)}-${baseUwp.slice(7)}`;
+    }
+
+    function getSectorDetails(globalRow, globalCol) {
+        const sectorWidth = subCols * 4;
+        const sectorHeight = subRows * 4;
+        const isVastness = mapMode === 'vastness';
+        const sectorX = isVastness ? Math.floor(globalCol / sectorWidth) : 0;
+        const sectorY = isVastness ? Math.floor(globalRow / sectorHeight) : 0;
+        const sectorLabels = ['SECA', 'SECB', 'SECC', 'SECD'];
+        const sectorIndex = sectorY * 2 + sectorX;
+        const sector = sectorLabels[sectorIndex] || sectorLabels[0];
+        const localCol = isVastness ? (globalCol % sectorWidth) : globalCol;
+        const localRow = isVastness ? (globalRow % sectorHeight) : globalRow;
+        const subsectorX = Math.floor(globalCol / subCols) % 4;
+        const subsectorY = Math.floor(globalRow / subRows) % 4;
+        const subsectorIndex = subsectorY * 4 + subsectorX;
+        const subsector = String.fromCharCode(65 + subsectorIndex);
+        return { hexCol: localCol, hexRow: localRow, sector, subsector };
+    }
+
     function buildT5Rows() {
         const levels = parseInt(bitDepthSlider.value, 10);
         const subsectorRanges = computeSubsectorRanges();
@@ -1768,15 +1794,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     worlds[index] = generateWorld();
                 }
                 const world = worlds[index];
-                const hex = `${String(col + 1).padStart(2, '0')}${String(row + 1).padStart(2, '0')}`;
+                const { hexCol, hexRow, sector, subsector } = getSectorDetails(globalRow, globalCol);
+                const hex = `${String(hexCol + 1).padStart(2, '0')}${String(hexRow + 1).padStart(2, '0')}`;
                 const name = `World ${hex}`;
-                const uwp = worldToUWP(world).replace(/\*$/, '');
+                const uwp = formatUwpForExport(world);
+                const remarks = (world.tradeCodes || []).join(' ');
                 const pbg = `${world.population}${0}${world.gasGiant ? 1 : 0}`;
                 rows.push([
                     hex,
                     name,
                     uwp,
-                    '',
+                    remarks,
                     '',
                     '',
                     '',
@@ -1786,7 +1814,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     pbg,
                     '',
                     '',
-                    ''
+                    '',
+                    sector,
+                    subsector
                 ]);
             }
         }
@@ -1794,9 +1824,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatT5Rows(rows, format) {
-        const header = ['Hex', 'Name', 'UWP', 'Remarks', '{Ix}', '(Ex)', '[Cx]', 'N', 'B', 'Z', 'PBG', 'W', 'A', 'Stellar'];
+        const header = ['Hex', 'Name', 'UWP', 'Remarks', '{Ix}', '(Ex)', '[Cx]', 'N', 'B', 'Z', 'PBG', 'W', 'A', 'Stellar', 'Sector', 'SS'];
         if (format === 'column') {
-            const widths = [4, 20, 9, 27, 6, 7, 6, 4, 2, 1, 3, 2, 4, 14];
+            const widths = [4, 20, 9, 27, 6, 7, 6, 4, 2, 1, 3, 2, 4, 14, 6, 2];
             const formatRow = (columns) => columns
                 .map((value, index) => String(value).padEnd(widths[index] || 0))
                 .join(' ')
